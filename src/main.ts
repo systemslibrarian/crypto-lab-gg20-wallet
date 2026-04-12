@@ -476,10 +476,11 @@ const bindEvents = (): void => {
   });
 
   document.querySelector<HTMLButtonElement>('#sign-p1')?.addEventListener('click', () => {
+    // Reset full signing state so stale Party 2 / combine / verify data is cleared
+    state.sign = { message: state.sign.message };
     state.sign.k1 = randomScalar();
     state.sign.gamma1 = randomScalar();
     state.sign.Gamma1 = scalarToPointHex(state.sign.gamma1);
-    state.sign.abortReason = undefined;
     rerender();
   });
 
@@ -496,10 +497,16 @@ const bindEvents = (): void => {
     const encX1PowK2 = modPow(d.encX1, mod(state.sign.k2, d.paillier.n), d.paillier.nsq);
     const delta2 = mod(encX1PowK2 * encRho, d.paillier.nsq);
 
+    // Clear combine/verify state before setting new Party 2 values
+    state.sign.r = undefined;
+    state.sign.s = undefined;
+    state.sign.signatureHex = undefined;
+    state.sign.verified = undefined;
+    state.sign.abortReason = undefined;
+
     state.sign.rho2 = rho2;
     state.sign.delta2 = delta2;
     state.sign.decryptedK2X1PlusRho2 = paillierDecrypt(delta2, d.paillier);
-    state.sign.abortReason = undefined;
     rerender();
   });
 
@@ -520,8 +527,12 @@ const bindEvents = (): void => {
       const e = mod(BigInt(`0x${hex(digest)}`), ORDER);
       const x = mod(d.x1 + d.x2, ORDER);
       const kinv = modInv(k, ORDER);
-      const sigS = mod(kinv * mod(e + r * x, ORDER), ORDER);
+      let sigS = mod(kinv * mod(e + r * x, ORDER), ORDER);
       if (sigS === 0n) throw new Error('Party 2 sent malformed Paillier ciphertext (s = 0)');
+
+      // BIP-146 low-S normalization: noble rejects s > ORDER/2
+      const halfOrder = ORDER >> 1n;
+      if (sigS > halfOrder) sigS = ORDER - sigS;
 
       s.r = r;
       s.s = sigS;
@@ -542,7 +553,8 @@ const bindEvents = (): void => {
     const s = state.sign;
     if (!(d.jointPub && s.signatureHex)) return;
     const digest = await sha256Bytes(s.message);
-    s.verified = secp256k1.verify(hexToBytes(s.signatureHex), digest, hexToBytes(d.jointPub));
+    // prehash: false — digest is already SHA-256(message); skip noble's default re-hash
+    s.verified = secp256k1.verify(hexToBytes(s.signatureHex), digest, hexToBytes(d.jointPub), { prehash: false });
     rerender();
   });
 };
