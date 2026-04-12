@@ -1,0 +1,22 @@
+{
+  "name": "crypto-lab-gg20-wallet",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Browser-based GG20 threshold ECDSA educational demo",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "deploy": "npm run build && gh-pages -d dist"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.0.1"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.8"
+  }
+}
