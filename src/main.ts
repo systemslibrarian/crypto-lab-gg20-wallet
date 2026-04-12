@@ -240,8 +240,8 @@ const rerender = (): void => {
     </header>
 
     <main id="main-content" role="main">
-      <section class="exhibit" id="exhibit-1">
-        <h2>Exhibit 1 — Why ECDSA Threshold Is Hard</h2>
+      <section class="exhibit" id="exhibit-1" aria-labelledby="ex1-heading">
+        <h2 id="ex1-heading">Exhibit 1 — Why ECDSA Threshold Is Hard</h2>
         <h3>Standard ECDSA recap</h3>
         <div class="math">x ∈ Z_n, X = x·G, R = k·G, r = R_x mod n, s = k⁻¹(H(m) + r·x) mod n</div>
         <div class="math">Verification: r = (s⁻¹·H(m)·G + s⁻¹·r·X)_x mod n</div>
@@ -253,17 +253,18 @@ const rerender = (): void => {
         <div class="math">ECDSA: s = k⁻¹(H + r·x). The k⁻¹ term forces secure multiplication and inversion over secret shares.</div>
         <div class="table-wrap">
           <table>
+            <caption>FROST vs GG20 comparison</caption>
             <thead>
-              <tr><th>Property</th><th>FROST (Schnorr)</th><th>GG20 (ECDSA)</th></tr>
+              <tr><th scope="col">Property</th><th scope="col">FROST (Schnorr)</th><th scope="col">GG20 (ECDSA)</th></tr>
             </thead>
             <tbody>
-              <tr><td>Signature equation</td><td>s = k + c·x</td><td>s = k⁻¹(H + r·x)</td></tr>
-              <tr><td>Key relationship</td><td>Linear</td><td>Nonlinear (k⁻¹)</td></tr>
-              <tr><td>Threshold technique</td><td>Simple share sum</td><td>Paillier HE + MPC</td></tr>
-              <tr><td>Setup complexity</td><td>Moderate (VSS)</td><td>High (DKG + Paillier)</td></tr>
-              <tr><td>Signing rounds</td><td>2</td><td>3+</td></tr>
-              <tr><td>Identifiable abort</td><td>✓ (RFC 9591)</td><td>✓ (GG20)</td></tr>
-              <tr><td>Deployed in</td><td>Research, some L1s</td><td>Fireblocks, Coinbase, ZenGo</td></tr>
+              <tr><th scope="row">Signature equation</th><td>s = k + c·x</td><td>s = k⁻¹(H + r·x)</td></tr>
+              <tr><th scope="row">Key relationship</th><td>Linear</td><td>Nonlinear (k⁻¹)</td></tr>
+              <tr><th scope="row">Threshold technique</th><td>Simple share sum</td><td>Paillier HE + MPC</td></tr>
+              <tr><th scope="row">Setup complexity</th><td>Moderate (VSS)</td><td>High (DKG + Paillier)</td></tr>
+              <tr><th scope="row">Signing rounds</th><td>2</td><td>3+</td></tr>
+              <tr><th scope="row">Identifiable abort</th><td>✓ (RFC 9591)</td><td>✓ (GG20)</td></tr>
+              <tr><th scope="row">Deployed in</th><td>Research, some L1s</td><td>Fireblocks, Coinbase, ZenGo</td></tr>
             </tbody>
           </table>
         </div>
@@ -271,8 +272,8 @@ const rerender = (): void => {
         <p><a href="https://systemslibrarian.github.io/crypto-lab-frost-threshold/" target="_blank" rel="noreferrer">For threshold Schnorr (FROST), see the dedicated demo</a>.</p>
       </section>
 
-      <section class="exhibit" id="exhibit-2">
-        <h2>Exhibit 2 — Paillier Encryption: The MPC Primitive</h2>
+      <section class="exhibit" id="exhibit-2" aria-labelledby="ex2-heading">
+        <h2 id="ex2-heading">Exhibit 2 — Paillier Encryption: The MPC Primitive</h2>
         <p><strong>Educational Paillier — toy parameters. Production uses 2048-bit.</strong></p>
         <div class="math">Enc(a) · Enc(b) = Enc(a + b) mod n², and Enc(a)^k = Enc(a·k) mod n²</div>
         <div class="controls">
@@ -280,14 +281,16 @@ const rerender = (): void => {
           <button id="paillier-add" type="button" ${p.keypair ? '' : 'disabled'}>Enc(7) × Enc(3)</button>
           <button id="paillier-scalar" type="button" ${p.keypair ? '' : 'disabled'}>Enc(5)^4</button>
         </div>
-        <p class="mono">Public n: ${truncate(p.keypair?.n)}</p>
-        <p class="mono">Additive homomorphism demo: ${p.addOutput ?? 'Pending'}</p>
-        <p class="mono">Scalar multiplication demo: ${p.scalarOutput ?? 'Pending'}</p>
+        <div aria-live="polite" aria-atomic="true">
+          <p class="mono">Public n: ${truncate(p.keypair?.n)}</p>
+          <p class="mono">Additive homomorphism demo: ${p.addOutput ?? 'Pending'}</p>
+          <p class="mono">Scalar multiplication demo: ${p.scalarOutput ?? 'Pending'}</p>
+        </div>
         <div class="callout">GG20 uses this primitive so one party can operate on another party's encrypted share without exposing that share.</div>
       </section>
 
-      <section class="exhibit" id="exhibit-3">
-        <h2>Exhibit 3 — GG20 Distributed Key Generation (2-of-2 Simplified)</h2>
+      <section class="exhibit" id="exhibit-3" aria-labelledby="ex3-heading">
+        <h2 id="ex3-heading">Exhibit 3 — GG20 Distributed Key Generation (2-of-2 Simplified)</h2>
         <p><strong>Educational Paillier — toy parameters. Production uses 2048-bit.</strong></p>
         <div class="controls">
           <button id="dkg-p1" type="button">Generate Party 1 share</button>
@@ -295,20 +298,22 @@ const rerender = (): void => {
           <button id="dkg-commit" type="button" ${(d.X1 && d.X2) ? '' : 'disabled'}>Commitment exchange</button>
           <button id="dkg-joint" type="button" ${(d.X1 && d.X2 && d.c1 && d.c2) ? '' : 'disabled'}>Compute joint public key</button>
         </div>
-        <p class="mono">x₁ (Party 1 share): ${truncate(d.x1)}</p>
-        <p class="mono">X₁ = x₁·G: ${truncate(d.X1)}</p>
-        <p class="mono">x₂ (Party 2 share): ${truncate(d.x2)}</p>
-        <p class="mono">X₂ = x₂·G: ${truncate(d.X2)}</p>
-        <p class="mono">H(X₁): ${truncate(d.c1)}</p>
-        <p class="mono">H(X₂): ${truncate(d.c2)}</p>
-        <p class="mono">Joint public key X = X₁ + X₂: ${truncate(d.jointPub)}</p>
-        <p class="mono">Paillier pk₁.n: ${truncate(d.paillier?.n)}</p>
-        <p class="mono">Enc₍pk₁₎(x₁): ${truncate(d.encX1)}</p>
+        <div aria-live="polite" aria-atomic="true">
+          <p class="mono">x₁ (Party 1 share): ${truncate(d.x1)}</p>
+          <p class="mono">X₁ = x₁·G: ${truncate(d.X1)}</p>
+          <p class="mono">x₂ (Party 2 share): ${truncate(d.x2)}</p>
+          <p class="mono">X₂ = x₂·G: ${truncate(d.X2)}</p>
+          <p class="mono">H(X₁): ${truncate(d.c1)}</p>
+          <p class="mono">H(X₂): ${truncate(d.c2)}</p>
+          <p class="mono">Joint public key X = X₁ + X₂: ${truncate(d.jointPub)}</p>
+          <p class="mono">Paillier pk₁.n: ${truncate(d.paillier?.n)}</p>
+          <p class="mono">Enc₍pk₁₎(x₁): ${truncate(d.encX1)}</p>
+        </div>
         <div class="callout">x₁ + x₂ = x is checked internally for consistency on toy arithmetic, but the full private key is never displayed.</div>
       </section>
 
-      <section class="exhibit" id="exhibit-4">
-        <h2>Exhibit 4 — GG20 Threshold Signing (2-of-2 Structural Simulation)</h2>
+      <section class="exhibit" id="exhibit-4" aria-labelledby="ex4-heading">
+        <h2 id="ex4-heading">Exhibit 4 — GG20 Threshold Signing (2-of-2 Structural Simulation)</h2>
         <p><strong>Educational Paillier — toy parameters. Production uses 2048-bit.</strong></p>
         <label for="message">Message</label>
         <input id="message" type="text" value="${s.message.replace(/"/g, '&quot;')}" />
@@ -318,20 +323,22 @@ const rerender = (): void => {
           <button id="sign-combine" type="button" ${(d.jointPub && s.k1 && s.k2) ? '' : 'disabled'}>Combine signatures</button>
           <button id="sign-verify" type="button" ${s.signatureHex ? '' : 'disabled'}>Verify signature</button>
         </div>
-        <p class="mono">Γ₁ = γ₁·G: ${truncate(s.Gamma1)}</p>
-        <p class="mono">Γ₂ = γ₂·G: ${truncate(s.Gamma2)}</p>
-        <p class="mono">δ₂ = Enc(x₁)^k₂ · Enc(ρ₂) mod n²: ${truncate(s.delta2)}</p>
-        <p class="mono">Dec(δ₂) = k₂·x₁ + ρ₂ mod n: ${truncate(s.decryptedK2X1PlusRho2)}</p>
-        <p class="mono">r component: ${truncate(s.r)}</p>
-        <p class="mono">s component: ${truncate(s.s)}</p>
-        <p class="mono">Signature (compact hex r||s): ${truncate(s.signatureHex)}</p>
-        <p class="mono">Verification result: ${s.verified === undefined ? 'Pending' : s.verified ? '✓ valid' : '✗ invalid'}</p>
-        ${s.abortReason ? `<p class="danger">Identifiable abort: ${s.abortReason}</p>` : ''}
+        <div aria-live="polite" aria-atomic="true">
+          <p class="mono">Γ₁ = γ₁·G: ${truncate(s.Gamma1)}</p>
+          <p class="mono">Γ₂ = γ₂·G: ${truncate(s.Gamma2)}</p>
+          <p class="mono">δ₂ = Enc(x₁)^k₂ · Enc(ρ₂) mod n²: ${truncate(s.delta2)}</p>
+          <p class="mono">Dec(δ₂) = k₂·x₁ + ρ₂ mod n: ${truncate(s.decryptedK2X1PlusRho2)}</p>
+          <p class="mono">r component: ${truncate(s.r)}</p>
+          <p class="mono">s component: ${truncate(s.s)}</p>
+          <p class="mono">Signature (compact hex r||s): ${truncate(s.signatureHex)}</p>
+          <p class="mono" role="status">Verification result: ${s.verified === undefined ? 'Pending' : s.verified ? '✓ valid' : '✗ invalid'}</p>
+          ${s.abortReason ? `<p class="danger" role="alert">Identifiable abort: ${s.abortReason}</p>` : ''}
+        </div>
         <div class="callout">Identifiable abort means malformed Paillier ciphertexts can be attributed to the cheating party instead of causing anonymous failure.</div>
       </section>
 
-      <section class="exhibit" id="exhibit-5">
-        <h2>Exhibit 5 — Security: What GG20 Protects Against</h2>
+      <section class="exhibit" id="exhibit-5" aria-labelledby="ex5-heading">
+        <h2 id="ex5-heading">Exhibit 5 — Security: What GG20 Protects Against</h2>
         <p>GG20 targets malicious adversaries with identifiable abort (GG20 ePrint 2020/540), extending GG18's practical threshold ECDSA design.</p>
         <ul>
           <li>Γᵢ = γᵢ·G hides γᵢ under discrete-log hardness.</li>
@@ -342,23 +349,24 @@ const rerender = (): void => {
         <div class="math">If ECDSA reuses nonce k with same r: k = (H(m₁)-H(m₂))·(s₁-s₂)⁻¹ mod n, then x leaks.</div>
         <div class="table-wrap">
           <table>
+            <caption>GG20 vs FROST security comparison</caption>
             <thead>
-              <tr><th>Property</th><th>GG20 (ECDSA)</th><th>FROST (Schnorr)</th></tr>
+              <tr><th scope="col">Property</th><th scope="col">GG20 (ECDSA)</th><th scope="col">FROST (Schnorr)</th></tr>
             </thead>
             <tbody>
-              <tr><td>Adversary model</td><td>Malicious with abort</td><td>Malicious with abort</td></tr>
-              <tr><td>Nonce safety</td><td>Joint generation + Paillier MPC</td><td>Nonce commitments</td></tr>
-              <tr><td>Key extraction risk</td><td>Paillier-protected</td><td>VSS-protected</td></tr>
-              <tr><td>Complexity</td><td>High</td><td>Moderate</td></tr>
-              <tr><td>Formal proof line</td><td>CCS/ePrint lineage</td><td>RFC 9591</td></tr>
+              <tr><th scope="row">Adversary model</th><td>Malicious with abort</td><td>Malicious with abort</td></tr>
+              <tr><th scope="row">Nonce safety</th><td>Joint generation + Paillier MPC</td><td>Nonce commitments</td></tr>
+              <tr><th scope="row">Key extraction risk</th><td>Paillier-protected</td><td>VSS-protected</td></tr>
+              <tr><th scope="row">Complexity</th><td>High</td><td>Moderate</td></tr>
+              <tr><th scope="row">Formal proof line</th><td>CCS/ePrint lineage</td><td>RFC 9591</td></tr>
             </tbody>
           </table>
         </div>
         <div class="callout">Why this matters: custody platforms can detect and attribute protocol deviation instead of silently exposing key material.</div>
       </section>
 
-      <section class="exhibit" id="exhibit-6">
-        <h2>Exhibit 6 — Threshold ECDSA in Production</h2>
+      <section class="exhibit" id="exhibit-6" aria-labelledby="ex6-heading">
+        <h2 id="ex6-heading">Exhibit 6 — Threshold ECDSA in Production</h2>
         <h3>Deployment snapshots</h3>
         <ul>
           <li><strong>Fireblocks:</strong> institutional MPC custody, threshold ECDSA variants at production scale.</li>

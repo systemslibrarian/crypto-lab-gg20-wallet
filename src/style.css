@@ -271,16 +271,137 @@ a {
   color: var(--accent);
 }
 
-@media (max-width: 760px) {
+/* ---------- Focus (ADA) ---------- */
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Skip link (ADA) ---------- */
+.skip-link:focus {
+  top: 0;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Reduced motion (ADA) ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- Tablet (max-width: 860px) ---------- */
+@media (max-width: 860px) {
+  #app {
+    width: 96vw;
+    padding: 1rem 0 1.5rem;
+  }
+
   header {
     padding: 1.55rem 1rem 1.1rem;
+    border-radius: 0.9rem;
   }
 
   .exhibit {
     padding: 1rem;
+    border-radius: 0.8rem;
   }
 
   table {
-    min-width: 520px;
+    min-width: 480px;
+  }
+
+  .controls {
+    gap: 0.5rem;
+  }
+}
+
+/* ---------- Mobile (max-width: 600px) ---------- */
+@media (max-width: 600px) {
+  #app {
+    width: 100vw;
+    padding: 0.5rem 0.5rem 1.2rem;
+  }
+
+  header {
+    padding: 1.2rem 0.8rem 1rem;
+    border-radius: 0.7rem;
+  }
+
+  header h1 {
+    font-size: 1.5rem;
+  }
+
+  .exhibit {
+    padding: 0.75rem;
+    border-radius: 0.65rem;
+  }
+
+  .exhibit h2 {
+    font-size: 1.1rem;
+  }
+
+  .exhibit h3 {
+    font-size: 0.95rem;
+  }
+
+  .controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* WCAG 2.1 SC 2.5.8: 44×44 minimum touch target */
+  button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.95rem;
+  }
+
+  .theme-toggle {
+    min-height: 44px;
+    min-width: 44px;
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  input[type='text'],
+  textarea {
+    min-height: 44px;
+    font-size: 1rem;
+  }
+
+  table {
+    min-width: 340px;
+    font-size: 0.8rem;
+  }
+
+  th,
+  td {
+    padding: 0.35rem 0.4rem;
+  }
+
+  .math {
+    font-size: 0.76rem;
+    padding: 0.5rem 0.6rem;
+  }
+
+  .mono {
+    font-size: 0.72rem;
+  }
+
+  .callout {
+    font-size: 0.88rem;
+    padding: 0.55rem 0.7rem;
+  }
+
+  .link-row {
+    flex-direction: column;
+    gap: 0.55rem;
   }
 }
