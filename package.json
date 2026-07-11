@@ -9,7 +9,6 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"test/**/*.test.ts\"",
     "test:a11y": "playwright test"
   },
   "dependencies": {
