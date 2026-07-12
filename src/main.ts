@@ -135,20 +135,26 @@ const rerender = (): void => {
       : '';
 
   app.innerHTML = `
-    <header>
-      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme">🌙</button>
-      <p class="subtitle">systemslibrarian · crypto-lab</p>
-      <h1>GG20 Threshold ECDSA Wallet</h1>
-      <p class="subtitle">
-        A faithful, runnable 2-of-2 GG20 threshold-ECDSA signer. Real secp256k1 arithmetic via
-        <strong>@noble/curves</strong>, real Paillier homomorphic encryption, and real MtA share
-        conversion — the full private key is <strong>never reconstructed</strong> at any point.
-      </p>
-      <p class="banner">
-        🔬 Educational sizes: Paillier uses 1024-bit n (production: ≥2048-bit). The cryptographic
-        <em>logic</em> is the genuine GG20 protocol — only the key sizes and the ZK proof layer are scaled down.
-      </p>
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme">🌙</button>
+    <header class="cl-hero">
+      <div class="cl-hero-main">
+        <h1 class="cl-hero-title">GG20 Wallet</h1>
+        <p class="cl-hero-sub">Threshold ECDSA · 2-of-n MPC · secp256k1</p>
+        <p class="cl-hero-desc">
+          Run a faithful 2-of-2 GG20 signer that produces one standard secp256k1 signature via real Paillier encryption and MtA share conversion — the full private key is never reconstructed.
+        </p>
+      </div>
+      <aside class="cl-hero-why" aria-label="Why it matters">
+        <span class="cl-hero-why-label">WHY IT MATTERS</span>
+        <p class="cl-hero-why-text">
+          Most major assets still ride on secp256k1/ECDSA, so institutional custody depends on threshold ECDSA that never assembles the key. A ZK range proof is the single check that blocks the wraparound attack.
+        </p>
+      </aside>
     </header>
+    <p class="banner">
+      🔬 Educational sizes: Paillier uses 1024-bit n (production: ≥2048-bit). The cryptographic
+      <em>logic</em> is the genuine GG20 protocol — only the key sizes and the ZK proof layer are scaled down.
+    </p>
 
     <main id="main-content" role="main">
       <section class="exhibit" id="exhibit-1" aria-labelledby="ex1-heading">
