@@ -13,6 +13,7 @@ import {
   paillierEncrypt,
   paillierDecrypt,
   mta,
+  mtaTrace,
   makeParty,
   gg20Sign,
   sha256Bytes,
@@ -59,6 +60,22 @@ test('MtA yields additive shares of the product over ORDER', () => {
     const b = randomScalar();
     const { alpha, beta } = mta(a, b, key);
     assert.equal(mod(alpha + beta, ORDER), mod(a * b, ORDER));
+  }
+});
+
+test('mtaTrace surfaces genuine intermediates: α+β = a·b, and Dec(cReply)=a·b+β′', () => {
+  const key = paillierKeygen(512);
+  for (let i = 0; i < 10; i += 1) {
+    const a = randomScalar();
+    const b = randomScalar();
+    const t = mtaTrace(a, b, key);
+    // the diagram's headline claim: additive shares reconstruct the product
+    assert.equal(t.check, true);
+    assert.equal(mod(t.alpha + t.beta, ORDER), mod(a * b, ORDER));
+    // the homomorphic reply really decrypts to a·b + β′ (β = −β′)
+    assert.equal(paillierDecrypt(t.cReply, key), mod(a * b + t.blind, key.n));
+    // encA really is Enc(a)
+    assert.equal(paillierDecrypt(t.encA, key), mod(a, key.n));
   }
 });
 

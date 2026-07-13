@@ -247,6 +247,45 @@ export const mta = (
   return { alpha, beta };
 };
 
+// Every intermediate value of a single MtA run, so a UI can *show* how a
+// multiplicative pair (a, b) becomes an additive pair (α, β) with α+β = a·b.
+// This is the genuine MtA computation (same identities as `mta` above), just
+// with the ciphertexts and blind surfaced instead of discarded. Nothing here is
+// faked: `check` recomputes a·b independently and compares to α+β.
+export type MtaTrace = {
+  a: bigint; // P1's secret (the value being encrypted)
+  b: bigint; // P2's secret (the exponent)
+  encA: bigint; // Enc_pk1(a), sent P1 → P2
+  blind: bigint; // β' picked by P2 (P2's private blinding value)
+  cReply: bigint; // Enc(a·b + β') = encA^b · Enc(β'), sent P2 → P1
+  alpha: bigint; // P1 decrypts cReply → a·b + β'   (P1's additive share)
+  beta: bigint; // P2 keeps −β'                      (P2's additive share)
+  product: bigint; // a·b  (recomputed independently, for the reveal)
+  sum: bigint; // α + β mod ORDER (must equal product)
+  check: boolean; // α + β ≡ a·b  (mod ORDER)
+};
+
+// `blindBits` defaults to the production MTA_BLIND_BITS; a UI may pass a smaller
+// value ONLY to keep the displayed numbers readable — the algebra is identical.
+export const mtaTrace = (
+  a: bigint,
+  b: bigint,
+  key: PaillierKeyPair,
+  blindBits: number = MTA_BLIND_BITS
+): MtaTrace => {
+  const encA = paillierEncrypt(mod(a, key.n), key); // P1 encrypts a under its own key
+  const blind = randBits(blindBits); // β' — P2's private blind
+  // P2 homomorphically computes Enc(a·b + β') using the two Paillier identities:
+  //   encA^b  = Enc(a·b)   (scalar-multiply-under-encryption)
+  //   · Enc(β') = Enc(a·b + β')  (add-under-encryption)
+  const cReply = mod(modPow(encA, mod(b, key.n), key.nsq) * paillierEncrypt(blind, key), key.nsq);
+  const alpha = mod(paillierDecrypt(cReply, key), ORDER); // P1 decrypts → a·b + β'
+  const beta = mod(-blind, ORDER); // P2 keeps −β'
+  const product = mod(a * b, ORDER);
+  const sum = mod(alpha + beta, ORDER);
+  return { a, b, encA, blind, cReply, alpha, beta, product, sum, check: sum === product };
+};
+
 // ---------- secp256k1 helpers ----------
 
 export const scalarToPointHex = (x: bigint): string => hex(BASE.multiply(x).toBytes(true));

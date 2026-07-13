@@ -366,6 +366,387 @@ a {
   color: var(--accent);
 }
 
+/* ---------- Teaching layer: glossary, start-here, diagrams ---------- */
+
+.plain-lead {
+  margin: 0.35rem 0 0.5rem;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  border-left: 3px solid var(--accent-2);
+  padding-left: 0.7rem;
+}
+
+.mono-inline {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9em;
+  color: var(--text);
+}
+
+/* Inline glossary term. Dotted underline signals "expandable definition". */
+abbr.gloss {
+  text-decoration: underline dotted;
+  text-underline-offset: 0.18em;
+  cursor: help;
+  color: var(--text);
+  font-weight: 600;
+}
+
+abbr.gloss:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.glossary-key .gloss-list {
+  margin: 0.6rem 0 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.gloss-row {
+  display: grid;
+  grid-template-columns: 3rem 1fr;
+  gap: 0.6rem;
+  align-items: baseline;
+}
+
+.gloss-row dt {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.gloss-row dd {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.start-here {
+  border-left: 4px solid var(--accent);
+}
+
+.start-steps {
+  margin: 0.6rem 0;
+  padding-left: 1.3rem;
+  line-height: 1.6;
+}
+
+.start-steps li {
+  margin: 0.35rem 0;
+  color: var(--text);
+}
+
+.start-tip {
+  margin-top: 0.6rem;
+}
+
+/* ---- MtA step-through diagram ---- */
+.mta-explainer {
+  margin: 1rem 0;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  background-color: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.mta-diagram {
+  margin-top: 0.6rem;
+}
+
+.mta-caption {
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  min-height: 2.6em;
+  margin: 0 0 0.7rem;
+}
+
+.mta-cols {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1fr;
+  gap: 0.6rem;
+  align-items: start;
+}
+
+.mta-col {
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  padding: 0.55rem;
+  background-color: var(--surface-alt);
+  min-height: 3rem;
+}
+
+.mta-col.channel {
+  background-color: color-mix(in srgb, var(--accent) 10%, var(--surface-alt));
+}
+
+.mta-party {
+  display: block;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+
+.mta-box {
+  display: block;
+  margin: 0.35rem 0;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.4rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--text);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  word-break: break-word;
+}
+
+.mta-box.secret {
+  border-left: 3px solid var(--accent-2);
+}
+
+.mta-box.blind {
+  border-left: 3px solid var(--warn);
+}
+
+.mta-box.share {
+  border-left: 3px solid var(--ok);
+}
+
+.mta-note {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.mta-empty {
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.mta-msg,
+.mta-op {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.76rem;
+  color: var(--text);
+  margin: 0.4rem 0;
+  padding: 0.35rem 0.45rem;
+  border-radius: 0.4rem;
+  background-color: var(--surface);
+  border: 1px dashed var(--border);
+  word-break: break-word;
+}
+
+.mta-op {
+  border-style: solid;
+  border-left: 3px solid var(--accent);
+}
+
+.mta-arrow {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.mta-reveal {
+  margin-top: 0.7rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.5rem;
+  background-color: color-mix(in srgb, var(--ok) 12%, var(--surface));
+}
+
+/* ---- Two-column party diagram (signing output) ---- */
+.party-diagram {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.4rem;
+  margin: 0.6rem 0;
+}
+
+.pd-head {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--text);
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.5rem;
+  background-color: var(--surface-alt);
+  border: 1px solid var(--border);
+}
+
+.pd-head.pd-p1 {
+  border-top: 3px solid var(--accent-2);
+}
+.pd-head.pd-p2 {
+  border-top: 3px solid var(--accent);
+}
+.pd-head.pd-mid {
+  border-top: 3px solid var(--text-muted);
+  text-align: center;
+}
+
+.pd-sub {
+  display: block;
+  font-weight: 400;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.pd-round {
+  grid-column: 1 / -1;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-top: 0.4rem;
+  padding-top: 0.3rem;
+  border-top: 1px dashed var(--border);
+}
+
+.pd-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background-color: var(--surface);
+}
+
+.pd-cell.pd-p1 {
+  border-left: 3px solid var(--accent-2);
+}
+.pd-cell.pd-p2 {
+  border-left: 3px solid var(--accent);
+}
+.pd-cell.pd-mid {
+  background-color: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+.pd-cell.pd-locked {
+  background-color: color-mix(in srgb, var(--ok) 10%, var(--surface));
+}
+.pd-cell.pd-dim {
+  opacity: 0.85;
+}
+.pd-cell.pd-out {
+  border: 1px solid var(--accent);
+}
+
+.pd-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pd-val {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  word-break: break-word;
+  margin: 0;
+}
+
+.verify-line {
+  margin-top: 0.6rem;
+  font-weight: 600;
+}
+
+/* ---- Wraparound number line ---- */
+.wrap-viz {
+  margin: 0.8rem 0;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  background-color: var(--surface-alt);
+}
+
+.wl {
+  margin: 1.4rem 0 0.6rem;
+}
+
+.wl-track {
+  position: relative;
+  height: 4px;
+  background: linear-gradient(90deg, var(--ok), var(--warn) 33%, var(--danger));
+  border-radius: 2px;
+  margin: 2.4rem 0.5rem 2.2rem;
+}
+
+.wl-tick,
+.wl-fence-label,
+.wl-marker {
+  position: absolute;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.wl-tick {
+  top: 0.7rem;
+  transform: translateX(-50%);
+  color: var(--text-muted);
+}
+.wl-tick.wl-0 {
+  left: 0;
+  transform: none;
+}
+.wl-tick.wl-n {
+  transform: translateX(-100%);
+}
+
+.wl-fence {
+  position: absolute;
+  top: -0.6rem;
+  bottom: -0.6rem;
+  width: 0;
+  border-left: 2px dashed var(--accent);
+}
+.wl-fence-label {
+  top: -1.9rem;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.wl-marker {
+  top: -1.6rem;
+  transform: translateX(-50%);
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+  border: 1px solid var(--border);
+  background-color: var(--surface);
+}
+.wl-marker.wl-honest {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+.wl-marker.wl-evil {
+  top: 0.9rem;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.wl-caption {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .mta-cols,
+  .party-diagram {
+    grid-template-columns: 1fr;
+  }
+  .pd-round {
+    margin-top: 0.6rem;
+  }
+}
+
 /* ---------- Focus (ADA) ---------- */
 a:focus-visible {
   outline: 2px solid var(--accent);

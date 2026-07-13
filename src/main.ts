@@ -6,6 +6,7 @@ import {
   type RangeProofAux,
   type RangeProof,
   type RangeVerdict,
+  type MtaTrace,
   ORDER,
   RANGE_BOUND,
   mod,
@@ -20,6 +21,7 @@ import {
   sha256Hex,
   makeParty,
   gg20Sign,
+  mtaTrace,
   verifySignature,
   randomScalar,
   setupRangeProofAux,
@@ -48,6 +50,15 @@ type SignState = {
   selfTest?: { pass: number; total: number; running: boolean };
 };
 
+// State for the standalone MtA step-through in Exhibit 4. `step` advances the
+// reveal; `trace` holds a *real* MtA run (small readable numbers) so each step
+// shows genuine intermediate values, never mock data.
+type MtaState = {
+  key?: PaillierKeyPair;
+  trace?: MtaTrace;
+  step: number; // 0 = not started, 1..5 = messages revealed
+};
+
 type ZkRun = { m: bigint; c: bigint; proof: RangeProof; verdict: RangeVerdict };
 
 type ZkState = {
@@ -62,6 +73,7 @@ const state: {
   paillierDemo: { keypair?: PaillierKeyPair; addOutput?: string; scalarOutput?: string };
   dkg: DkgState;
   sign: SignState;
+  mta: MtaState;
   zk: ZkState;
 } = {
   paillierDemo: {},
@@ -70,6 +82,7 @@ const state: {
     message: 'Transfer 2.75 BTC to cold vault #7',
     cheat: false
   },
+  mta: { step: 0 },
   zk: {}
 };
 
@@ -114,12 +127,160 @@ const honesty = (real: string, simplified: string): string => `
     <p><strong>Simplified:</strong> ${simplified}</p>
   </details>`;
 
+// ---------- Notation glossary (newcomer on-ramp) ----------
+// Plain-language gloss for every Greek/algebraic symbol used on the page. Used
+// two ways: (1) inline via sym() as an accessible tooltip the first time a
+// symbol appears, and (2) as a collapsible "symbols key" reference.
+const GLOSSARY: ReadonlyArray<{ sym: string; name: string; gloss: string }> = [
+  { sym: 'q', name: 'group order', gloss: 'the number of points on secp256k1 — every scalar lives in [0, q). Also written n in ECDSA formulas.' },
+  { sym: 'G', name: 'generator point', gloss: 'the fixed base point of secp256k1; multiplying it by a scalar gives a public point.' },
+  { sym: 'x', name: 'private key', gloss: 'the wallet signing key. In GG20 it is split as x = x₁ + x₂ and never assembled.' },
+  { sym: 'k', name: 'nonce', gloss: 'a fresh random per-signature secret, split as k = k₁ + k₂. Reusing it leaks x.' },
+  { sym: 'γ', name: 'gamma — blinding nonce', gloss: 'a second random value per party; its only job is to let GG20 invert k without ever forming k.' },
+  { sym: 'Γ', name: 'Gamma = γ·G', gloss: 'the public commitment to γ. Broadcast so parties can jointly recover R.' },
+  { sym: 'δ', name: 'delta = k·γ', gloss: 'the product of the two nonces. Revealed in the clear; used to compute R = δ⁻¹·Γ = k⁻¹·G.' },
+  { sym: 'σ', name: 'sigma = k·x', gloss: 'the product of nonce and key, held as additive shares σ₁, σ₂. Never revealed.' },
+  { sym: 'R', name: 'nonce point', gloss: 'the ECDSA nonce point; its x-coordinate becomes r. Here R = δ⁻¹·Γ = k⁻¹·G.' },
+  { sym: 'r', name: 'r component', gloss: 'first half of the signature: the x-coordinate of R, reduced mod q.' },
+  { sym: 's', name: 's component', gloss: 'second half of the signature, s = s₁ + s₂, computed without ever forming k or x.' },
+  { sym: 'e', name: 'message hash', gloss: 'the hash of the message being signed, reduced mod q (H(m) in ECDSA).' },
+  { sym: 'α / β', name: 'alpha / beta — MtA shares', gloss: 'the additive shares MtA produces: α + β = a·b, one held by each party.' },
+  { sym: 'N', name: 'Paillier modulus', gloss: 'the public modulus of a party’s Paillier key; encryption works mod N².' },
+  { sym: 'Ñ', name: 'auxiliary modulus', gloss: 'a second RSA modulus used only by the range proof’s Pedersen commitment.' },
+  { sym: 'q³', name: 'range bound', gloss: 'the ceiling the range proof enforces on the encrypted value; the fence that stops the wraparound attack.' }
+];
+
+const GLOSSARY_INDEX: Record<string, { name: string; gloss: string }> = Object.fromEntries(
+  GLOSSARY.map((g) => [g.sym, { name: g.name, gloss: g.gloss }])
+);
+
+// Inline glossable symbol: renders text with a tooltip + accessible description
+// so a newcomer can decode notation without leaving the page. `key` selects the
+// gloss; `label` is what actually appears (defaults to the key).
+const sym = (key: string, label = key): string => {
+  const g = GLOSSARY_INDEX[key];
+  if (!g) return esc(label);
+  const title = `${g.name} — ${g.gloss}`;
+  return `<abbr class="gloss" tabindex="0" title="${esc(title)}" aria-label="${esc(label)}: ${esc(title)}">${esc(label)}</abbr>`;
+};
+
+const glossaryKey = (): string => `
+  <details class="honesty glossary-key">
+    <summary>Symbols key — tap any term to expand its plain-language meaning</summary>
+    <dl class="gloss-list">
+      ${GLOSSARY.map(
+        (g) => `<div class="gloss-row"><dt>${esc(g.sym)}</dt><dd><strong>${esc(g.name)}.</strong> ${esc(g.gloss)}</dd></div>`
+      ).join('')}
+    </dl>
+  </details>`;
+
+// ---------- MtA step-through diagram ----------
+// Reveals the five MtA messages one at a time over a real mtaTrace, so the
+// multiplicative→additive conversion is *seen*, not described. Every number is
+// genuine (see mtaTrace in gg20.ts). Steps:
+//   1. P1 has a, P2 has b (two boxes, no arrow yet)
+//   2. P1 → P2: encA = Enc(a)                    (locked box crosses the channel)
+//   3. P2 computes encA^b · Enc(β′) = Enc(a·b+β′) using Exhibit 2's identities
+//   4. P2 → P1: cReply; P1 decrypts → α = a·b+β′; P2 keeps β = −β′
+//   5. Reveal: α + β = a·b — the multiplicative pair is now an additive pair
+const mtaStepCaption = (step: number): string => {
+  switch (step) {
+    case 1:
+      return 'Round 0 — P1 holds a secret <span class="mono-inline">a</span>, P2 holds a secret <span class="mono-inline">b</span>. Goal: each ends up with a share of a·b, revealing neither number.';
+    case 2:
+      return 'Message 1 (P1 → P2): P1 encrypts a under its own Paillier key and sends the locked box <span class="mono-inline">encA = Enc(a)</span>. P2 cannot open it.';
+    case 3:
+      return 'P2 works on the locked box: <span class="mono-inline">encA<sup>b</sup>·Enc(β′)</span>. By Exhibit 2’s two identities this equals <span class="mono-inline">Enc(a·b + β′)</span> — P2 chose a private blind β′ and never saw a.';
+    case 4:
+      return 'Message 2 (P2 → P1): P2 returns that ciphertext. P1 decrypts to get <span class="mono-inline">α = a·b + β′</span>. P2 keeps <span class="mono-inline">β = −β′</span>. Neither share alone reveals a, b, or a·b.';
+    case 5:
+      return 'The reveal: <strong>α + β = (a·b + β′) + (−β′) = a·b</strong>. The multiplicative secret a·b is now an additive split across the two parties — that is MtA.';
+    default:
+      return 'Press <em>Load an MtA example</em> to run a real conversion, then step through it.';
+  }
+};
+
+const renderMtaDiagram = (m: MtaState): string => {
+  const t = m.trace;
+  const show = (n: number): boolean => Boolean(t) && m.step >= n;
+  const box = (label: string, cls: string): string => `<span class="mta-box ${cls}">${label}</span>`;
+  const p1 =
+    t && m.step >= 1
+      ? `${box(`a = ${t.a}`, 'secret')}${show(4) ? box(`α = ${t.alpha} <span class="mta-note">= a·b + β′</span>`, 'share') : ''}`
+      : '<span class="mta-empty">—</span>';
+  const p2 =
+    t && m.step >= 1
+      ? `${box(`b = ${t.b}`, 'secret')}${show(3) ? box(`β′ = ${t.blind} <span class="mta-note">private blind</span>`, 'blind') : ''}${show(4) ? box(`β = −β′ = ${t.beta}`, 'share') : ''}`
+      : '<span class="mta-empty">—</span>';
+  const channel = t
+    ? `
+      ${show(2) ? `<div class="mta-msg to-p2"><span class="mta-arrow" aria-hidden="true">→</span> Enc(a) = ${truncate(t.encA, 18)}</div>` : ''}
+      ${show(3) ? `<div class="mta-op">P2 computes Enc(a)<sup>b</sup>·Enc(β′) = Enc(a·b+β′)</div>` : ''}
+      ${show(4) ? `<div class="mta-msg to-p1"><span class="mta-arrow" aria-hidden="true">←</span> Enc(a·b+β′) = ${truncate(t.cReply, 18)}</div>` : ''}`
+    : '';
+  const reveal =
+    t && m.step >= 5
+      ? `<p class="mono ${t.check ? 'ok' : 'danger'} mta-reveal">α + β = ${mod(t.alpha + t.beta, ORDER)} = a·b = ${t.product} → ${t.check ? '✓ additive shares reconstruct the product' : '✗ mismatch'}</p>`
+      : '';
+  return `
+    <div class="mta-diagram" role="group" aria-label="MtA step-through diagram, step ${m.step} of 5">
+      <p class="mono mta-caption" role="status">${mtaStepCaption(m.step)}</p>
+      <div class="mta-cols">
+        <div class="mta-col p1"><span class="mta-party">Party 1</span>${p1}</div>
+        <div class="mta-col channel"><span class="mta-party">Paillier channel</span>${channel || '<span class="mta-empty">—</span>'}</div>
+        <div class="mta-col p2"><span class="mta-party">Party 2</span>${p2}</div>
+      </div>
+      ${reveal}
+    </div>`;
+};
+
+// ---------- Two-column party diagram for signing output ----------
+// Places every SignResult value in the column of the party that holds it, with
+// a central broadcast lane for values that are actually sent. The 🔒 markers for
+// σ₁/σ₂ are preserved in-place: they sit in each party's column and never cross
+// the channel, making "no party holds the full key" spatially obvious.
+const renderPartyDiagram = (res: SignResult | undefined): string => {
+  const cell = (label: string, value: string, cls = ''): string =>
+    `<div class="pd-cell ${cls}"><span class="pd-label">${label}</span><span class="pd-val mono">${value}</span></div>`;
+  const p = (v: string | bigint | undefined, chars = 26): string => (res ? truncate(v, chars) : '—');
+  return `
+    <div class="party-diagram" role="group" aria-label="GG20 signing party diagram: values held by Party 1, the broadcast channel, and Party 2">
+      <div class="pd-head pd-p1">Party 1 <span class="pd-sub">holds x₁, k₁, σ₁</span></div>
+      <div class="pd-head pd-mid">Public / broadcast</div>
+      <div class="pd-head pd-p2">Party 2 <span class="pd-sub">holds x₂, k₂, σ₂</span></div>
+
+      <div class="pd-round" aria-hidden="true">Round 1 — commit nonces</div>
+      ${cell('Γ₁ = γ₁·G', p(res?.Gamma1), 'pd-p1')}
+      ${cell('broadcast Γ₁, Γ₂', res ? 'revealed →← so both can form Γ = Γ₁+Γ₂' : '—', 'pd-mid')}
+      ${cell('Γ₂ = γ₂·G', p(res?.Gamma2), 'pd-p2')}
+
+      <div class="pd-round" aria-hidden="true">Round 2 — MtA shares of δ=k·γ and σ=k·x</div>
+      ${cell('δ₁ (share of k·γ)', p(res?.delta1, 22), 'pd-p1')}
+      ${cell('δ = δ₁+δ₂ = k·γ', res ? `revealed: ${truncate(res.delta, 22)}` : '—', 'pd-mid')}
+      ${cell('δ₂ (share of k·γ)', p(res?.delta2, 22), 'pd-p2')}
+      ${cell('🔒 σ₁ (share of k·x)', res ? 'held by P1 — never sent' : '—', 'pd-p1 pd-locked')}
+      ${cell('— never broadcast —', res ? 'σ is the secret; only its shares exist' : '—', 'pd-mid pd-dim')}
+      ${cell('🔒 σ₂ (share of k·x)', res ? 'held by P2 — never sent' : '—', 'pd-p2 pd-locked')}
+
+      <div class="pd-round" aria-hidden="true">Round 3 — local sᵢ, then s = s₁+s₂</div>
+      ${cell('R = δ⁻¹·Γ = k⁻¹·G', res ? truncate(res.R, 22) : '—', 'pd-mid')}
+      ${cell('s₁ = e·k₁ + r·σ₁', p(res?.s1, 22), 'pd-p1')}
+      ${cell('s = s₁ + s₂', res ? truncate(res.s, 22) : '—', 'pd-mid')}
+      ${cell('s₂ = e·k₂ + r·σ₂', p(res?.s2, 22), 'pd-p2')}
+
+      <div class="pd-round" aria-hidden="true">Output</div>
+      ${cell('r = R_x mod q', res ? truncate(res.r, 22) : '—', 'pd-mid')}
+      ${cell('signature r‖s', res ? truncate(res.signatureHex, 40) : '—', 'pd-mid pd-out')}
+    </div>`;
+};
+
 // ---------- Render ----------
 
 const rerender = (): void => {
   const p = state.paillierDemo;
   const d = state.dkg;
   const s = state.sign;
+  const mta = state.mta;
   const z = state.zk;
   const res = s.result;
   const ready = Boolean(d.p1 && d.p2 && d.jointPub);
@@ -157,9 +318,24 @@ const rerender = (): void => {
     </p>
 
     <main id="main-content" role="main">
+      <section class="exhibit start-here" id="start-here" aria-labelledby="start-heading">
+        <h2 id="start-heading">Start here — the 30-second path</h2>
+        <p>New to threshold signing? The exhibits build on each other. Follow this order and you will watch two parties sign a Bitcoin transaction without either one ever holding the key:</p>
+        <ol class="start-steps">
+          <li><strong>Generate both parties</strong> (Exhibit 3) → then <em>Open commitments</em> to form the shared wallet key.</li>
+          <li><strong>See MtA happen</strong> (Exhibit 4): step through how a secret product becomes two harmless shares — this is the idea the whole protocol rests on.</li>
+          <li><strong>Sign</strong> (Exhibit 4): run all rounds and watch the two-party diagram; then <em>Verify</em> the result is an ordinary secp256k1 signature.</li>
+          <li><strong>Toggle "malicious Party 2"</strong> and re-sign to see cheating detected.</li>
+          <li><strong>Run the range proof</strong> (Exhibit 6): see the one inequality that blocks the wraparound attack.</li>
+        </ol>
+        <p class="start-tip">Unfamiliar with a symbol like ${sym('γ')}, ${sym('δ')} or ${sym('σ')}? Every one is glossed inline (hover or focus it) and collected here:</p>
+        ${glossaryKey()}
+      </section>
+
       <section class="exhibit" id="exhibit-1" aria-labelledby="ex1-heading">
         <h2 id="ex1-heading">Exhibit 1 — Why ECDSA Threshold Is Hard</h2>
         <h3>Standard ECDSA recap</h3>
+        <p class="plain-lead">In plain terms: a signature is a number ${sym('s')} computed from a fresh random ${sym('k', 'nonce k')}, the message hash, and the secret key ${sym('x')} — thresholding must produce this same number without either secret ever existing in one place.</p>
         <div class="math">x ∈ Z_n, X = x·G, R = k·G, r = R_x mod n, s = k⁻¹(H(m) + r·x) mod n</div>
         <h3>The threshold problem</h3>
         <p>In threshold mode, no one holds full x or full k, but ECDSA still needs <span class="mono">k⁻¹(H + r·x)</span>. Inverting and multiplying <em>shared secrets</em> is nonlinear and requires interactive MPC.</p>
@@ -191,6 +367,7 @@ const rerender = (): void => {
       <section class="exhibit" id="exhibit-2" aria-labelledby="ex2-heading">
         <h2 id="ex2-heading">Exhibit 2 — Paillier Encryption: The MPC Primitive</h2>
         <p>Paillier is <em>additively homomorphic</em>: you can add encrypted values, and multiply an encrypted value by a public scalar, without decrypting. GG20 builds its secure multiplication (MtA) on exactly these two identities.</p>
+        <p class="plain-lead">In plain terms: these two rules let one party do arithmetic <em>on someone else's locked box</em> — add a number into it, or scale it — without ever opening it. That is the whole trick MtA needs.</p>
         <div class="math">Enc(a) · Enc(b) = Enc(a + b) mod n²,    Enc(a)^k = Enc(a·k) mod n²</div>
         <div class="controls">
           <button id="paillier-keygen" type="button">Generate readable Paillier (small)</button>
@@ -238,10 +415,25 @@ const rerender = (): void => {
         <h2 id="ex4-heading">Exhibit 4 — GG20 Threshold Signing (faithful, no key reconstruction)</h2>
         ${ready ? '' : '<p class="warn" role="status">Complete Exhibit 3 (both parties + joint key) to enable signing.</p>'}
         <ol class="flow">
-          <li><strong>Round 1:</strong> P1 picks (k₁, γ₁), P2 picks (k₂, γ₂); each reveals Γᵢ = γᵢ·G.</li>
-          <li><strong>Round 2:</strong> MtA over Paillier converts the cross-products into additive shares of δ = k·γ and σ = k·x.</li>
-          <li><strong>Round 3:</strong> reveal δ, set R = δ⁻¹·Γ = k⁻¹·G, each party computes sᵢ = e·kᵢ + r·σᵢ; output s = s₁ + s₂.</li>
+          <li><strong>Round 1:</strong> P1 picks (${sym('k', 'k₁')}, ${sym('γ', 'γ₁')}), P2 picks (${sym('k', 'k₂')}, ${sym('γ', 'γ₂')}); each reveals ${sym('Γ', 'Γᵢ')} = γᵢ·G.</li>
+          <li><strong>Round 2:</strong> MtA over Paillier converts the cross-products into additive shares of ${sym('δ', 'δ = k·γ')} and ${sym('σ', 'σ = k·x')} — <em>this is the step the diagram below unpacks.</em></li>
+          <li><strong>Round 3:</strong> reveal ${sym('δ')}, set ${sym('R')} = δ⁻¹·Γ = k⁻¹·G, each party computes sᵢ = ${sym('e')}·kᵢ + ${sym('r')}·σᵢ; output ${sym('s')} = s₁ + s₂.</li>
         </ol>
+
+        <div class="mta-explainer" aria-labelledby="mta-heading">
+          <h3 id="mta-heading">The crux: how MtA turns a secret <em>product</em> into two harmless <em>sums</em></h3>
+          <p class="plain-lead">GG20 needs P1's value <span class="mono-inline">a</span> times P2's value <span class="mono-inline">b</span>, but neither will reveal their number. MtA hands each party a <em>share</em> — ${sym('α', 'α')} to P1, ${sym('β', 'β')} to P2 — such that <strong>α + β = a·b</strong>, and neither share alone tells you anything. Step through a <em>real</em> run below (small readable numbers; the identical math runs at 1024-bit during signing):</p>
+          <div class="controls">
+            <button id="mta-run" type="button">${mta.trace ? 'New MtA example' : 'Load an MtA example (real numbers)'}</button>
+            <button id="mta-next" type="button" ${mta.trace && mta.step < 5 ? '' : 'disabled'}>Next step →</button>
+            <button id="mta-reset" type="button" ${mta.trace ? '' : 'disabled'}>Reset</button>
+          </div>
+          ${renderMtaDiagram(mta)}
+          ${honesty(
+            'Every value shown is a genuine MtA computation (mtaTrace in the crypto core, unit-tested): encA is a real Paillier ciphertext of a, cReply = encA^b·Enc(β′) is real homomorphic evaluation, and α+β=a·b is recomputed and checked, not asserted.',
+            'Small primes keep the ciphertexts short enough to read; signing (below) runs the same steps at 1024-bit. The ZK range proof each MtA message also carries is shown separately in Exhibit 6.'
+          )}
+        </div>
         <label for="message">Message to sign</label>
         <input id="message" type="text" value="${esc(s.message)}" ${ready ? '' : 'disabled'} />
         <label class="check">
@@ -253,22 +445,11 @@ const rerender = (): void => {
           <button id="sign-verify" type="button" ${res?.signatureHex ? '' : 'disabled'}>Verify with @noble/curves</button>
           <button id="self-test" type="button" ${ready && !s.selfTest?.running ? '' : 'disabled'}>${s.selfTest?.running ? 'Running…' : 'Self-test: 25 random signings'}</button>
         </div>
+        <p class="plain-lead">The result below is laid out as a <strong>party diagram</strong>: each value sits in the column of the party that physically holds it. The centre lane is the public/broadcast channel — only values there ever leave a party. Notice ${sym('σ', 'σ₁')} and ${sym('σ', 'σ₂')} never do.</p>
         <div aria-live="polite" aria-atomic="true">
-          <p class="mono">R1 · Γ₁ = γ₁·G: ${truncate(res?.Gamma1)}</p>
-          <p class="mono">R1 · Γ₂ = γ₂·G: ${truncate(res?.Gamma2)}</p>
-          <p class="mono">R2 · δ₁ (P1's share of k·γ): ${truncate(res?.delta1, 30)}</p>
-          <p class="mono">R2 · δ₂ (P2's share of k·γ): ${truncate(res?.delta2, 30)}</p>
-          <p class="mono">R2 · δ = δ₁+δ₂ = k·γ (revealed): ${truncate(res?.delta, 30)}</p>
-          <p class="mono">R2 · σ₁ (P1's share of k·x — never shared): ${res ? '🔒 held by P1' : '—'}</p>
-          <p class="mono">R2 · σ₂ (P2's share of k·x — never shared): ${res ? '🔒 held by P2' : '—'}</p>
-          <p class="mono">R3 · R = δ⁻¹·Γ = k⁻¹·G: ${truncate(res?.R)}</p>
-          <p class="mono">R3 · s₁ (P1 local): ${truncate(res?.s1, 30)}</p>
-          <p class="mono">R3 · s₂ (P2 local): ${truncate(res?.s2, 30)}</p>
-          <p class="mono">r component: ${truncate(res?.r)}</p>
-          <p class="mono">s = s₁+s₂ component: ${truncate(res?.s)}</p>
-          <p class="mono">Signature (compact r‖s): ${truncate(res?.signatureHex)}</p>
-          <p class="mono" role="status">Verification: ${
-            res === undefined ? 'Pending' : res.verified ? '✓ valid standard ECDSA signature' : '✗ invalid'
+          ${renderPartyDiagram(res)}
+          <p class="mono verify-line" role="status">Verification: ${
+            res === undefined ? 'Pending — run signing above' : res.verified ? '✓ valid standard ECDSA signature' : '✗ invalid'
           }</p>
           ${s.verifyEcho ? `<p class="mono ${res?.verified ? 'ok' : 'danger'}">${esc(s.verifyEcho)}</p>` : ''}
           ${res?.abortReason ? `<p class="danger" role="alert">⚠ Identifiable abort: ${esc(res.abortReason)}</p>` : ''}
@@ -316,7 +497,25 @@ const rerender = (): void => {
       <section class="exhibit" id="exhibit-6" aria-labelledby="ex6-heading">
         <h2 id="ex6-heading">Exhibit 6 — Zero-Knowledge Range Proof (runnable)</h2>
         <!-- runnable ZK range proof -->
-        <p>This is the proof Exhibit 5 referred to, implemented for real. Every MtA message in GG20 carries a ZK proof that the encrypted value is <em>small</em> (in [0, q)). Without it, a malicious party could encrypt m ≈ N so that m·(other share) + blind <strong>wraps modulo n</strong>, silently corrupting the additive sharing. The proof convinces the verifier the value is in range <em>without revealing it</em> — the classic GG18 / Lindell Σ-protocol over a Pedersen commitment (auxiliary modulus Ñ).</p>
+        <p>This is the proof Exhibit 5 referred to, implemented for real. Every MtA message in GG20 carries a ZK proof that the encrypted value is <em>small</em> (in [0, q)). Without it, a malicious party could encrypt ${sym('N', 'm ≈ N')} so that m·(other share) + blind <strong>wraps modulo n</strong>, silently corrupting the additive sharing. The proof convinces the verifier the value is in range <em>without revealing it</em> — the classic GG18 / Lindell Σ-protocol over a Pedersen commitment (auxiliary modulus ${sym('Ñ')}).</p>
+
+        <div class="wrap-viz" role="group" aria-label="Wraparound number line: an honest small value stays in range; a malicious near-N value wraps past the modulus">
+          <p class="plain-lead">Why "small" matters — the number line MtA lives on. MtA's shares must add up over the <em>integers</em>; if a value is big enough that the sum passes the modulus ${sym('N')}, it silently <em>wraps</em> and the share is corrupted. The ${sym('q³')} bound is the fence that keeps every value far from that edge:</p>
+          <div class="wl">
+            <div class="wl-track">
+              <span class="wl-tick wl-0">0</span>
+              <span class="wl-fence" style="left:33%"><span class="wl-fence-label">q³ (the range-proof fence)</span></span>
+              <span class="wl-tick wl-n" style="left:100%">n = N (modulus)</span>
+              <span class="wl-marker wl-honest" style="left:12%" title="honest m·share+blind — safely below the fence">honest ✓</span>
+              <span class="wl-marker wl-evil" style="left:96%" title="malicious m ≈ N — sits past the fence and wraps mod n">malicious m≈N ✗</span>
+            </div>
+          </div>
+          <p class="wl-caption mono">Honest values (a·b + blind ≪ q³) sit far left of the fence. A malicious m≈N lands to the <em>right</em> of the fence — the range check <span class="danger">s₁ ≤ q³</span> is exactly what rejects it before the wrap can happen.${
+            z.malicious ? (z.malicious.verdict.rangeOk ? '' : ' <span class="danger">← you just triggered this: the malicious run failed the fence check below.</span>') : ''
+          }</p>
+        </div>
+
+        <p class="plain-lead">In plain terms: the prover shows "my hidden value is small (below ${sym('q³')})" without revealing it; the verifier re-runs two equations that only balance if that is true.</p>
         <div class="math">Prove: c = (1+N)^m·r^N encrypts m ∈ [0, q).  Check: s₁≤q³,  (1+N)^s₁·s^N ≡ u·c^e,  h₁^s₁·h₂^s₂ ≡ w·z^e</div>
         <div class="controls">
           <button id="zk-setup" type="button" ${z.generating ? 'disabled' : ''}>${z.generating ? 'Generating…' : 'Trusted setup: Paillier key + aux (Ñ, h₁, h₂)'}</button>
@@ -479,6 +678,30 @@ const bindEvents = (): void => {
       ? '✓ Consistency check passed: X₁+X₂ = (x₁+x₂)·G (verified by point arithmetic; full key never displayed).'
       : '✗ Internal consistency check failed.';
     resetDownstream();
+    rerender();
+  });
+
+  // Exhibit 4 — MtA step-through (real numbers, kept small for readability)
+  const loadMtaExample = (): void => {
+    const key = paillierKeygen(16); // readable Paillier modulus
+    // small secrets a, b and a small blind so α = a·b + β′ stays legible; the
+    // identical computation runs at 1024-bit inside signing below.
+    const a = 3n + (randomScalar() % 40n);
+    const b = 3n + (randomScalar() % 40n);
+    state.mta.key = key;
+    state.mta.trace = mtaTrace(a, b, key, 12);
+    state.mta.step = 1;
+    rerender();
+  };
+  document.querySelector<HTMLButtonElement>('#mta-run')?.addEventListener('click', loadMtaExample);
+  document.querySelector<HTMLButtonElement>('#mta-next')?.addEventListener('click', () => {
+    if (state.mta.trace && state.mta.step < 5) {
+      state.mta.step += 1;
+      rerender();
+    }
+  });
+  document.querySelector<HTMLButtonElement>('#mta-reset')?.addEventListener('click', () => {
+    state.mta = { step: 0 };
     rerender();
   });
 
