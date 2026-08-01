@@ -274,6 +274,34 @@ const renderPartyDiagram = (res: SignResult | undefined): string => {
     </div>`;
 };
 
+// ---------- Phase-5 consistency checks ----------
+// GG20 does not wait for the final signature to fail. Before any party releases
+// sᵢ, two point identities are checked against the values the protocol just
+// produced. Both are computed in gg20.ts on every run; this only displays them.
+const renderPhase5 = (res: SignResult | undefined): string => {
+  const row = (label: string, expect: string, got: string | undefined, ok: boolean | undefined): string =>
+    `<div class="p5-row ${res === undefined ? '' : ok ? 'ok' : 'danger'}">
+       <span class="p5-label mono">${label}</span>
+       <span class="p5-expect mono">expected ${expect}</span>
+       <span class="p5-got mono">${res === undefined ? '—' : esc(truncate(got, 26))}</span>
+       <span class="p5-mark">${res === undefined ? '' : ok ? '✓ holds' : '✗ FAILS'}</span>
+     </div>`;
+  return `
+    <div class="phase5" role="group" aria-label="GG20 Phase-5 consistency checks">
+      <h3 class="p5-head">Phase 5 — the protocol's own consistency checks</h3>
+      <p class="plain-lead">Each party multiplies <em>its own</em> share into R and broadcasts only the resulting curve point — recovering the share from it would be a discrete log, so nothing secret leaves anyone. Both identities hold exactly when every party used the γᵢ it committed to:</p>
+      ${row('Σ kᵢ·R', 'G (the generator)', res?.checks.kR, res?.checks.kROk)}
+      ${row('Σ σᵢ·R', 'X (the wallet public key)', res?.checks.sigmaR, res?.checks.sigmaROk)}
+      <p class="mono p5-verdict ${res === undefined ? '' : res.checks.ok ? 'ok' : 'danger'}" role="status">${
+        res === undefined
+          ? 'Pending — run signing above'
+          : res.checks.ok
+            ? '✓ both identities hold — the protocol proceeds to release s₁ and s₂'
+            : '✗ abort: the deviation is caught here, before any sᵢ is released'
+      }</p>
+    </div>`;
+};
+
 // ---------- Render ----------
 
 const rerender = (): void => {
@@ -291,7 +319,10 @@ const rerender = (): void => {
       ? `
         <p class="mono">m (secret plaintext, hidden in proof): ${run.m > RANGE_BOUND ? `${truncate(run.m, 20)} — ${run.m.toString(2).length} bits` : 'a valid share < q (256 bits)'}</p>
         <p class="mono">s₁ = e·m + α: ${run.proof.s1.toString(2).length} bits   (range bound q³ = ${RANGE_BOUND.toString(2).length} bits)</p>
-        <p class="mono ${run.verdict.rangeOk ? 'ok' : 'danger'}">① range check (0 ≤ s₁ ≤ q³): ${run.verdict.rangeOk ? '✓ pass' : '✗ FAIL'}</p>
+        <p class="mono ${run.verdict.rangeOk ? 'ok' : 'danger'}">① range bound (0 ≤ s₁ ≤ q³): ${run.verdict.rangeOk ? '✓ pass' : '✗ FAIL'}</p>
+        <p class="mono ${run.verdict.challengeOk ? 'ok' : 'danger'}">② Fiat–Shamir challenge: ${run.verdict.challengeOk ? '✓ pass' : '✗ FAIL'}</p>
+        <p class="mono ${run.verdict.paillierOk ? 'ok' : 'danger'}">③ Paillier relation (1+N)^s₁·s^N ≡ u·c^e: ${run.verdict.paillierOk ? '✓ pass' : '✗ FAIL'}</p>
+        <p class="mono ${run.verdict.commitmentOk ? 'ok' : 'danger'}">④ commitment relation h₁^s₁·h₂^s₂ ≡ w·z^e: ${run.verdict.commitmentOk ? '✓ pass' : '✗ FAIL'}</p>
         <p class="mono ${run.verdict.ok ? 'ok' : 'danger'}">verdict: ${run.verdict.ok ? '✓ accepted' : '✗ rejected'} — ${esc(run.verdict.reason)}</p>`
       : '';
 
@@ -448,6 +479,7 @@ const rerender = (): void => {
         <p class="plain-lead">The result below is laid out as a <strong>party diagram</strong>: each value sits in the column of the party that physically holds it. The centre lane is the public/broadcast channel — only values there ever leave a party. Notice ${sym('σ', 'σ₁')} and ${sym('σ', 'σ₂')} never do.</p>
         <div aria-live="polite" aria-atomic="true">
           ${renderPartyDiagram(res)}
+          ${renderPhase5(res)}
           <p class="mono verify-line" role="status">Verification: ${
             res === undefined ? 'Pending — run signing above' : res.verified ? '✓ valid standard ECDSA signature' : '✗ invalid'
           }</p>
@@ -461,8 +493,8 @@ const rerender = (): void => {
         </div>
         <div class="callout"><strong>🔒 The key claim, made testable:</strong> nowhere in the code is x₁+x₂ or k₁+k₂ ever computed during signing. P1 holds σ₁, P2 holds σ₂, and s = s₁ + s₂ where each sᵢ is computed locally. The self-test proves 25 such signatures verify against the public key.</div>
         ${honesty(
-          'Real MtA over 1024-bit Paillier, the genuine δ = k·γ nonce-inversion (R = δ⁻¹·Γ = k⁻¹·G), and an output that verifies as an ordinary secp256k1 signature.',
-          'The ZK range/consistency proofs are omitted, so cheating is detected (signature fails) but not cryptographically attributed; δ is revealed in the clear as in the protocol.'
+          'Real MtA over 1024-bit Paillier, the genuine δ = k·γ nonce-inversion (R = δ⁻¹·Γ = k⁻¹·G), the two GG18/GG20 Phase-5 identities evaluated on every run, and an output that verifies as an ordinary secp256k1 signature. The abort verdict is derived from those identities, not from knowing which toggle you set.',
+          'The ZK proofs that accompany each Phase-5 broadcast are omitted, so a deviation is detected but not cryptographically attributed to a party; δ is revealed in the clear as in the protocol.'
         )}
       </section>
 
@@ -545,8 +577,9 @@ const rerender = (): void => {
         <h3>2. MtA-with-check (range + discrete-log binding)</h3>
         <p>In the σ = k·x phase, the value being multiplied is a <em>committed key share</em> xᵢ with public point Xᵢ = xᵢ·G. MtA-with-check augments the range proof of Exhibit 6 with one extra equation proving the <em>same</em> m satisfies Xᵢ = m·G — so a party cannot use one value in the EC commitment and a different one inside Paillier. <em>Status here: range proof implemented (Exhibit 6); the DL-binding equation is described but not wired into the signing path.</em></p>
         <div class="math">Extra commitment: û = m·G (curve point);  extra check: s₁·G ≟ û + e·Xᵢ</div>
-        <h3>3. Consistency check on δ and R</h3>
-        <p>After δ = k·γ is revealed, parties check g^δ against the published Γᵢ. A mismatch (exactly what the "malicious Party 2" toggle in Exhibit 4 induces) signals an abort. <em>Status here: detection is real — the signature fails to verify.</em></p>
+        <h3>3. Phase-5 consistency checks on R</h3>
+        <p>Once R = δ⁻¹·Γ is formed, and <em>before</em> any party releases its sᵢ, each party broadcasts kᵢ·R and σᵢ·R — curve points, not scalars, so no share is revealed. The others then check two identities that hold only if everyone used the γᵢ they committed to as Γᵢ. A mismatch (exactly what the "malicious Party 2" toggle in Exhibit 4 induces) aborts the round. <em>Status here: implemented and evaluated on every signing run — see the Phase-5 panel in Exhibit 4.</em></p>
+        <div class="math">Σ kᵢ·R ≟ G   (since Σkᵢ = k and R = k⁻¹·G)      Σ σᵢ·R ≟ X   (since Σσᵢ = k·x)</div>
         <h3>4. Type-5 and Type-7 aborts (attribution)</h3>
         <p>If the final signature fails, GG20 runs a blame phase: parties reveal additional commitments and ZK proofs so honest parties agree on the single cheating identity. The "type-5"/"type-7" labels refer to the protocol phase whose proof failed. This is the step that turns <em>detection</em> into <em>identification</em>. <em>Status here: described, not implemented — faithful attribution needs every preceding proof in place.</em></p>
         <div class="callout">The honest takeaway: detection (does the protocol output a valid signature?) is cheap and real in this demo. Attribution (who cheated?) requires the full proof stack above; we implement its keystone — the range proof — and document the rest rather than fake it.</div>
@@ -557,6 +590,7 @@ const rerender = (): void => {
             <tbody>
               <tr><th scope="row">secp256k1 + Paillier + MtA</th><td>Joint signing without key reconstruction</td><td>✓ implemented</td></tr>
               <tr><th scope="row">MtA range proof</th><td>Prevent out-of-range / wraparound</td><td>✓ implemented (Exhibit 6)</td></tr>
+              <tr><th scope="row">Phase-5 checks (Σkᵢ·R, Σσᵢ·R)</th><td>Detect a deviating party before sᵢ is released</td><td>✓ implemented (Exhibit 4)</td></tr>
               <tr><th scope="row">Paillier–Blum proof</th><td>Well-formed modulus</td><td>○ assumed honest</td></tr>
               <tr><th scope="row">MtA DL-binding</th><td>Tie Paillier value to Xᵢ</td><td>○ described</td></tr>
               <tr><th scope="row">Type-5/7 blame phase</th><td>Attribute the cheater</td><td>○ described</td></tr>

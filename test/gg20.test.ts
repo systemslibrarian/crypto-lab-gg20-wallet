@@ -148,6 +148,47 @@ test('malicious Party 2 (inconsistent Γ₂) is detected and aborts', async () =
   assert.ok(res.abortReason && res.abortReason.length > 0);
 });
 
+test('Phase-5 identities hold on an honest run: Σkᵢ·R = G and Σσᵢ·R = X', async () => {
+  const p1 = await makeParty();
+  const p2 = await makeParty();
+  const jointPub = pointAddHex(p1.X, p2.X);
+  for (let i = 0; i < 5; i += 1) {
+    const res = gg20Sign({ p1, p2, jointPub }, await sha256Bytes(`honest ${i}`), false);
+    assert.equal(res.checks.kROk, true, 'Σkᵢ·R should equal G');
+    assert.equal(res.checks.sigmaROk, true, 'Σσᵢ·R should equal the joint public key');
+    assert.equal(res.checks.ok, true);
+    // Σσᵢ·R is literally the wallet public key, not merely "consistent".
+    assert.equal(res.checks.sigmaR, jointPub);
+    assert.equal(res.abortReason, undefined);
+  }
+});
+
+test('Phase-5 checks catch the cheat themselves — not the `cheat` flag', async () => {
+  const p1 = await makeParty();
+  const p2 = await makeParty();
+  const jointPub = pointAddHex(p1.X, p2.X);
+  const res = gg20Sign({ p1, p2, jointPub }, await sha256Bytes('cheat'), true);
+  // Both identities break, and they break for reasons computed from the run.
+  assert.equal(res.checks.kROk, false);
+  assert.equal(res.checks.sigmaROk, false);
+  assert.equal(res.checks.ok, false);
+  assert.notEqual(res.checks.kR, scalarToPointHex(1n)); // Σkᵢ·R is not G
+  assert.notEqual(res.checks.sigmaR, jointPub);
+  assert.ok(res.abortReason?.includes('Phase-5'));
+});
+
+test('the Phase-5 verdict agrees with signature verification on every run', async () => {
+  // The detection story is only honest if the checks and the final verify never
+  // disagree. Neither is allowed to be a proxy for the other.
+  const p1 = await makeParty();
+  const p2 = await makeParty();
+  const jointPub = pointAddHex(p1.X, p2.X);
+  for (const cheat of [false, true, false, true]) {
+    const res = gg20Sign({ p1, p2, jointPub }, await sha256Bytes(`agree ${cheat}`), cheat);
+    assert.equal(res.checks.ok, res.verified);
+  }
+});
+
 test('ZK range proof: honest in-range value verifies', async () => {
   const pk = paillierKeygen(512);
   const aux = setupRangeProofAux(512);
@@ -159,7 +200,7 @@ test('ZK range proof: honest in-range value verifies', async () => {
   assert.equal(v.rangeOk, true);
 });
 
-test('ZK range proof: out-of-range value (m ≈ N) is REJECTED by the range check', async () => {
+test('ZK range proof: out-of-range value (m ≈ N) is REJECTED by the range bound ALONE', async () => {
   const pk = paillierKeygen(512);
   const aux = setupRangeProofAux(512);
   const m = pk.n - 1n; // the wraparound-attack value: far outside [0, q)
@@ -167,7 +208,12 @@ test('ZK range proof: out-of-range value (m ≈ N) is REJECTED by the range chec
   const proof = await proveRange(m, r, c, pk, aux);
   const v = await verifyRange(proof, c, pk, aux);
   assert.equal(v.ok, false);
-  assert.equal(v.rangeOk, false); // specifically the range bound, not some other check
+  assert.equal(v.rangeOk, false); // specifically the range bound...
+  // ...and the page's headline claim: the cheater's algebra is otherwise valid.
+  // This is why verifyRange must not short-circuit on check (1).
+  assert.equal(v.challengeOk, true);
+  assert.equal(v.paillierOk, true);
+  assert.equal(v.commitmentOk, true);
   assert.ok(proof.s1 > RANGE_BOUND);
 });
 

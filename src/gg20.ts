@@ -27,6 +27,34 @@ export type Party = {
   commitment: string; // H(Xᵢ), revealed before Xᵢ
 };
 
+// GG18/GG20 Phase 5 — the in-protocol consistency checks. These are what turn
+// "the signature happened not to verify" into "the protocol detected a
+// deviation", and they are computed here rather than narrated.
+//
+// Two point identities, each holding if and only if every party used, in the
+// MtA phase, the same γᵢ it committed to as Γᵢ:
+//
+//   5A:  Σ kᵢ·R = G      because Σkᵢ = k and an honest R is k⁻¹·G
+//   5C:  Σ σᵢ·R = X      because Σσᵢ = k·x and an honest R is k⁻¹·G
+//
+// Each party computes kᵢ·R and σᵢ·R locally and broadcasts only the resulting
+// curve point; recovering kᵢ or σᵢ from one is a discrete log. So these run
+// without reconstructing k, x, or σ anywhere — the same property the rest of
+// the protocol maintains.
+//
+// They give *detection*, not attribution. Naming the deviating party needs the
+// ZK proof that accompanies each Phase-5 broadcast in the full type-5/type-7
+// blame phase; that is documented in Exhibit 7, not implemented.
+export type Phase5Checks = {
+  /** Σ kᵢ·R, compressed hex. Must equal G. */
+  kR: string;
+  kROk: boolean;
+  /** Σ σᵢ·R, compressed hex. Must equal the joint public key X. */
+  sigmaR: string;
+  sigmaROk: boolean;
+  ok: boolean;
+};
+
 // Everything produced by one run of the GG20 signing protocol. Each field is
 // labelled with which party physically holds it, so the UI can prove the full
 // secret is never assembled in one place.
@@ -46,6 +74,8 @@ export type SignResult = {
   s: bigint;
   signatureHex: string;
   verified: boolean;
+  /** Phase-5 identities, evaluated on every run — honest or not. */
+  checks: Phase5Checks;
   abortReason?: string;
 };
 
@@ -289,6 +319,25 @@ export const mtaTrace = (
 // ---------- secp256k1 helpers ----------
 
 export const scalarToPointHex = (x: bigint): string => hex(BASE.multiply(x).toBytes(true));
+
+type CurvePoint = ReturnType<typeof secp256k1.Point.fromHex>;
+
+// Scalar multiply that tolerates a zero scalar (noble rejects it) by returning
+// the identity. Only reachable with negligible probability, but the Phase-5
+// checks must not throw where the protocol would simply abort.
+const mulSafe = (P: CurvePoint, s: bigint): CurvePoint => {
+  const k = mod(s, ORDER);
+  return k === 0n ? secp256k1.Point.ZERO : P.multiply(k);
+};
+
+// The identity has no compressed SEC1 encoding; label it rather than throw.
+const pointHexSafe = (P: CurvePoint): string => {
+  try {
+    return hex(P.toBytes(true));
+  } catch {
+    return 'point at infinity';
+  }
+};
 export const pointX = (pointHex: string): bigint => mod(secp256k1.Point.fromHex(pointHex).toAffine().x, ORDER);
 export const pointAddHex = (aHex: string, bHex: string): string =>
   hex(secp256k1.Point.fromHex(aHex).add(secp256k1.Point.fromHex(bHex)).toBytes(true));
@@ -372,10 +421,31 @@ export const gg20Sign = (
   const signatureHex = `${to32Hex(r)}${to32Hex(s)}`;
   const verified = verifySignature(signatureHex, digest, d.jointPub);
 
-  const abortReason =
-    !verified && cheat
-      ? 'Party 2 committed Γ₂ inconsistent with the γ₂ it used in MtA. The joint R no longer equals k⁻¹·G, so the signature fails — detection is real. Real GG20 then runs a blame phase (the ZK range proof of Exhibit 6 plus the further checks of Exhibit 7) to attribute the abort to Party 2 specifically; this demo implements the keystone range proof and documents the rest.'
-      : undefined;
+  // Phase 5 — run the consistency identities before trusting the output. These
+  // depend only on the values the protocol actually produced; nothing here
+  // consults the `cheat` flag, so the verdict below cannot agree with the
+  // narration while disagreeing with the math.
+  const kRPoint = mulSafe(R, k1).add(mulSafe(R, k2));
+  const sigmaRPoint = mulSafe(R, sigma1).add(mulSafe(R, sigma2));
+  const jointPubPoint = secp256k1.Point.fromHex(d.jointPub);
+  const kROk = kRPoint.equals(BASE);
+  const sigmaROk = sigmaRPoint.equals(jointPubPoint);
+  const checks: Phase5Checks = {
+    kR: pointHexSafe(kRPoint),
+    kROk,
+    sigmaR: pointHexSafe(sigmaRPoint),
+    sigmaROk,
+    ok: kROk && sigmaROk
+  };
+
+  const failed = [
+    ...(kROk ? [] : ['Σ kᵢ·R ≠ G — the revealed Γ does not match the γ used in MtA, so R is not k⁻¹·G']),
+    ...(sigmaROk ? [] : ['Σ σᵢ·R ≠ X — the σ shares do not multiply out to k·x against this R'])
+  ];
+
+  const abortReason = checks.ok
+    ? undefined
+    : `Phase-5 consistency check failed: ${failed.join('; ')}. The protocol aborts here — it does not need to wait for the signature to fail verification. This is detection, not attribution: naming the deviating party requires the ZK proof attached to each Phase-5 broadcast (Exhibit 7), which this demo documents rather than implements.`;
 
   return {
     cheat,
@@ -393,6 +463,7 @@ export const gg20Sign = (
     s,
     signatureHex,
     verified,
+    checks,
     abortReason
   };
 };
@@ -493,8 +564,23 @@ export const proveRange = async (
   return { z, u, w, s, s1, s2, e };
 };
 
-export type RangeVerdict = { ok: boolean; reason: string; rangeOk: boolean };
+export type RangeVerdict = {
+  ok: boolean;
+  /** (1) 0 ≤ s₁ ≤ q³ — the bound that stops the wraparound attack. */
+  rangeOk: boolean;
+  /** (2) e = H(N,c,z,u,w) mod q — Fiat–Shamir binding. */
+  challengeOk: boolean;
+  /** (3) (1+N)^s₁·s^N ≡ u·c^e (mod N²) — ties the proof to the ciphertext. */
+  paillierOk: boolean;
+  /** (4) h₁^s₁·h₂^s₂ ≡ w·z^e (mod Ñ) — ties the proof to the commitment. */
+  commitmentOk: boolean;
+  reason: string;
+};
 
+// All four checks are evaluated on every call — deliberately, with no early
+// return. The teaching point of the out-of-range run is that a cheater's
+// *algebra* is impeccable and only the range bound rejects them; short-
+// circuiting on check (1) would leave that claim asserted instead of shown.
 export const verifyRange = async (
   proof: RangeProof,
   c: bigint,
@@ -504,34 +590,35 @@ export const verifyRange = async (
   const { nTilde, h1, h2 } = aux;
   const { z, u, w, s, s1, s2, e } = proof;
 
-  // (1) Range bound — the check that actually stops the wraparound attack.
+  // (1) Range bound.
   const rangeOk = s1 >= 0n && s1 <= RANGE_BOUND;
-  if (!rangeOk) {
-    return {
-      ok: false,
-      rangeOk: false,
-      reason: `range check FAILED: s₁ has ${s1.toString(2).length} bits but the bound q³ has ${RANGE_BOUND.toString(2).length} — the encrypted value is too large (out of [0, q)).`
-    };
-  }
   // (2) Fiat–Shamir consistency.
-  if ((await rangeChallenge(pk.n, c, z, u, w)) !== e) {
-    return { ok: false, rangeOk, reason: 'challenge mismatch: the proof was tampered with.' };
-  }
+  const challengeOk = (await rangeChallenge(pk.n, c, z, u, w)) === e;
   // (3) Paillier relation.
-  const lhs1 = mod(modPow(pk.g, s1, pk.nsq) * modPow(s, pk.n, pk.nsq), pk.nsq);
-  const rhs1 = mod(u * modPow(c, e, pk.nsq), pk.nsq);
-  if (lhs1 !== rhs1) {
-    return { ok: false, rangeOk, reason: 'Paillier relation (1+N)^s₁·s^N ≠ u·c^e — proof invalid.' };
-  }
+  const paillierOk =
+    mod(modPow(pk.g, s1, pk.nsq) * modPow(s, pk.n, pk.nsq), pk.nsq) ===
+    mod(u * modPow(c, e, pk.nsq), pk.nsq);
   // (4) Commitment relation.
-  const lhs2 = mod(modPow(h1, s1, nTilde) * modPow(h2, s2, nTilde), nTilde);
-  const rhs2 = mod(w * modPow(z, e, nTilde), nTilde);
-  if (lhs2 !== rhs2) {
-    return { ok: false, rangeOk, reason: 'commitment relation h₁^s₁·h₂^s₂ ≠ w·z^e — proof invalid.' };
+  const commitmentOk =
+    mod(modPow(h1, s1, nTilde) * modPow(h2, s2, nTilde), nTilde) ===
+    mod(w * modPow(z, e, nTilde), nTilde);
+
+  const ok = rangeOk && challengeOk && paillierOk && commitmentOk;
+
+  let reason: string;
+  if (ok) {
+    reason = 'all four checks passed: the plaintext is proven to lie in [0, q) — without revealing it.';
+  } else if (!rangeOk && challengeOk && paillierOk && commitmentOk) {
+    reason = `rejected by the RANGE BOUND ALONE: s₁ has ${s1.toString(2).length} bits against a q³ bound of ${RANGE_BOUND.toString(2).length}. Checks (2)–(4) all passed — the cheater's algebra is valid, which is exactly why the bound has to exist.`;
+  } else {
+    const broken = [
+      ...(rangeOk ? [] : ['(1) range bound 0 ≤ s₁ ≤ q³']),
+      ...(challengeOk ? [] : ['(2) Fiat–Shamir challenge — the proof was tampered with']),
+      ...(paillierOk ? [] : ['(3) Paillier relation (1+N)^s₁·s^N ≠ u·c^e']),
+      ...(commitmentOk ? [] : ['(4) commitment relation h₁^s₁·h₂^s₂ ≠ w·z^e'])
+    ];
+    reason = `rejected — failed ${broken.join(', ')}.`;
   }
-  return {
-    ok: true,
-    rangeOk: true,
-    reason: 'all four checks passed: the plaintext is proven to lie in [0, q) — without revealing it.'
-  };
+
+  return { ok, rangeOk, challengeOk, paillierOk, commitmentOk, reason };
 };
