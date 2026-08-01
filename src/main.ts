@@ -297,7 +297,7 @@ const rerender = (): void => {
 
   app.innerHTML = `
     <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme">🌙</button>
-    <header class="cl-hero">
+    <div class="cl-hero">
       <div class="cl-hero-main">
         <h1 class="cl-hero-title">GG20 Wallet</h1>
         <p class="cl-hero-sub">Threshold ECDSA · 2-of-n MPC · secp256k1</p>
@@ -311,7 +311,7 @@ const rerender = (): void => {
           Most major assets still ride on secp256k1/ECDSA, so institutional custody depends on threshold ECDSA that never assembles the key. A ZK range proof is the single check that blocks the wraparound attack.
         </p>
       </aside>
-    </header>
+    </div>
     <p class="banner">
       🔬 Educational sizes: Paillier uses 1024-bit n (production: ≥2048-bit). The cryptographic
       <em>logic</em> is the genuine GG20 protocol — only the key sizes and the ZK proof layer are scaled down.

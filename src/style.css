@@ -75,7 +75,11 @@ body {
   padding: 1.3rem 0 2rem;
 }
 
-header:not(.cl-hero) {
+/* Panel styling for a lab-owned page header. The shared site bar (.cl-topbar)
+   must be excluded: this rule outranks .cl-topbar on specificity, and in the
+   light theme it repainted the bar with --surface (near white), leaving the
+   bar's fixed #eafff8 title text at ~1.05:1. */
+header:not(.cl-hero):not(.cl-topbar) {
   position: relative;
   background-color: var(--surface);
   border: 1px solid var(--border);
@@ -85,7 +89,7 @@ header:not(.cl-hero) {
   box-shadow: 0 18px 40px var(--shadow);
 }
 
-header:not(.cl-hero) h1 {
+header:not(.cl-hero):not(.cl-topbar) h1 {
   margin: 0.4rem 0;
   font-size: clamp(2rem, 5vw, 3rem);
 }
@@ -109,7 +113,6 @@ header:not(.cl-hero) h1 {
   max-width: 80ch;
 }
 
-/* BEGIN cl-hero standard — managed, keep in sync across fleet */
 .cl-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:clamp(1rem,4vw,3rem);flex-wrap:wrap;margin:clamp(1rem,3vw,2rem) 0 1.5rem;}
 .cl-hero-main{flex:1 1 22rem;min-width:min(100%,20rem);}
 .cl-hero-title{margin:0;font-size:clamp(1.6rem,3.8vw,2.7rem);font-weight:700;line-height:1.1;letter-spacing:.01em;}
@@ -118,8 +121,7 @@ header:not(.cl-hero) h1 {
 .cl-hero-why{flex:0 1 min(40%,26rem);min-width:min(100%,15rem);border:1px solid var(--border);border-radius:10px;padding:.85rem 1.05rem;background:color-mix(in oklab,var(--accent) 6%,transparent);}
 .cl-hero-why-label{display:block;font-size:.68rem;font-weight:700;letter-spacing:.14em;}
 .cl-hero-why-text{margin:.35rem 0 0;font-size:.95rem;line-height:1.5;}
-@media (max-width:640px){.cl-hero{flex-direction:column;}.cl-hero-why{flex-basis:auto;width:100%;}}
-/* END cl-hero standard */
+@media (max-width:640px){.cl-hero{flex-direction:column;}.cl-hero-why{flex-basis:auto;width:100%;}.cl-hero-main{flex-basis:auto;min-width:0;}}
 
 .theme-toggle {
   position: absolute;
@@ -664,6 +666,10 @@ abbr.gloss:focus-visible {
 
 .wl {
   margin: 1.4rem 0 0.6rem;
+  /* The tick/fence/marker labels are absolutely positioned and white-space:nowrap,
+     so at ~360px the right-hand "malicious m≈N" label runs past the track and used
+     to push the whole page into horizontal scroll. Scroll it here instead. */
+  overflow-x: auto;
 }
 
 .wl-track {
@@ -778,7 +784,7 @@ a:focus-visible {
     padding: 1rem 0 1.5rem;
   }
 
-  header:not(.cl-hero) {
+  header:not(.cl-hero):not(.cl-topbar) {
     padding: 1.55rem 1rem 1.1rem;
     border-radius: 0.9rem;
   }
@@ -804,12 +810,12 @@ a:focus-visible {
     padding: 0.5rem 0.5rem 1.2rem;
   }
 
-  header:not(.cl-hero) {
+  header:not(.cl-hero):not(.cl-topbar) {
     padding: 1.2rem 0.8rem 1rem;
     border-radius: 0.7rem;
   }
 
-  header:not(.cl-hero) h1 {
+  header:not(.cl-hero):not(.cl-topbar) h1 {
     font-size: 1.5rem;
   }
 
