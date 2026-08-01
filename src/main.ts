@@ -367,16 +367,16 @@ const rerender = (): void => {
         <h2 id="ex1-heading">Exhibit 1 — Why ECDSA Threshold Is Hard</h2>
         <h3>Standard ECDSA recap</h3>
         <p class="plain-lead">In plain terms: a signature is a number ${sym('s')} computed from a fresh random ${sym('k', 'nonce k')}, the message hash, and the secret key ${sym('x')} — thresholding must produce this same number without either secret ever existing in one place.</p>
-        <div class="math">x ∈ Z_n, X = x·G, R = k·G, r = R_x mod n, s = k⁻¹(H(m) + r·x) mod n</div>
+        <div class="math" tabindex="0" role="group" aria-label="Standard ECDSA equations">x ∈ Z_n, X = x·G, R = k·G, r = R_x mod n, s = k⁻¹(H(m) + r·x) mod n</div>
         <h3>The threshold problem</h3>
         <p>In threshold mode, no one holds full x or full k, but ECDSA still needs <span class="mono">k⁻¹(H + r·x)</span>. Inverting and multiplying <em>shared secrets</em> is nonlinear and requires interactive MPC.</p>
         <h3>Why FROST (Schnorr) is easier</h3>
-        <div class="math">Schnorr: s = k + c·x (linear), so each signer computes s_i = k_i + c·x_i and shares simply add.</div>
+        <div class="math" tabindex="0" role="group" aria-label="Schnorr signing equation">Schnorr: s = k + c·x (linear), so each signer computes s_i = k_i + c·x_i and shares simply add.</div>
         <h3>Why ECDSA is harder</h3>
-        <div class="math">ECDSA: s = k⁻¹(H + r·x). The k⁻¹ and r·x terms force secure multiplication of secret shares.</div>
-        <div class="table-wrap">
+        <div class="math" tabindex="0" role="group" aria-label="ECDSA signing equation">ECDSA: s = k⁻¹(H + r·x). The k⁻¹ and r·x terms force secure multiplication of secret shares.</div>
+        <div class="table-wrap" tabindex="0" role="group" aria-labelledby="t-frost-gg20-caption">
           <table>
-            <caption>FROST vs GG20 comparison</caption>
+            <caption id="t-frost-gg20-caption">FROST vs GG20 comparison</caption>
             <thead>
               <tr><th scope="col">Property</th><th scope="col">FROST (Schnorr)</th><th scope="col">GG20 (ECDSA)</th></tr>
             </thead>
@@ -399,7 +399,7 @@ const rerender = (): void => {
         <h2 id="ex2-heading">Exhibit 2 — Paillier Encryption: The MPC Primitive</h2>
         <p>Paillier is <em>additively homomorphic</em>: you can add encrypted values, and multiply an encrypted value by a public scalar, without decrypting. GG20 builds its secure multiplication (MtA) on exactly these two identities.</p>
         <p class="plain-lead">In plain terms: these two rules let one party do arithmetic <em>on someone else's locked box</em> — add a number into it, or scale it — without ever opening it. That is the whole trick MtA needs.</p>
-        <div class="math">Enc(a) · Enc(b) = Enc(a + b) mod n²,    Enc(a)^k = Enc(a·k) mod n²</div>
+        <div class="math" tabindex="0" role="group" aria-label="Paillier homomorphic identities">Enc(a) · Enc(b) = Enc(a + b) mod n²,    Enc(a)^k = Enc(a·k) mod n²</div>
         <div class="controls">
           <button id="paillier-keygen" type="button">Generate readable Paillier (small)</button>
           <button id="paillier-add" type="button" ${p.keypair ? '' : 'disabled'}>Enc(7) · Enc(3) → ?</button>
@@ -507,10 +507,10 @@ const rerender = (): void => {
           <li>MtA range proofs stop a malicious signer injecting out-of-range shares that would wrap modulo n — <strong>run this proof yourself in Exhibit 6</strong>.</li>
           <li>Joint nonce generation removes any single party's ability to reuse or bias k.</li>
         </ul>
-        <div class="math">If ECDSA reuses nonce k with same r: x = (s·k − H(m))·r⁻¹, and k = (H(m₁)−H(m₂))·(s₁−s₂)⁻¹ — the key leaks.</div>
-        <div class="table-wrap">
+        <div class="math" tabindex="0" role="group" aria-label="Nonce-reuse key-recovery equations">If ECDSA reuses nonce k with same r: x = (s·k − H(m))·r⁻¹, and k = (H(m₁)−H(m₂))·(s₁−s₂)⁻¹ — the key leaks.</div>
+        <div class="table-wrap" tabindex="0" role="group" aria-labelledby="t-gg20-frost-security-caption">
           <table>
-            <caption>GG20 vs FROST security comparison</caption>
+            <caption id="t-gg20-frost-security-caption">GG20 vs FROST security comparison</caption>
             <thead>
               <tr><th scope="col">Property</th><th scope="col">GG20 (ECDSA)</th><th scope="col">FROST (Schnorr)</th></tr>
             </thead>
@@ -533,7 +533,7 @@ const rerender = (): void => {
 
         <div class="wrap-viz" role="group" aria-label="Wraparound number line: an honest small value stays in range; a malicious near-N value wraps past the modulus">
           <p class="plain-lead">Why "small" matters — the number line MtA lives on. MtA's shares must add up over the <em>integers</em>; if a value is big enough that the sum passes the modulus ${sym('N')}, it silently <em>wraps</em> and the share is corrupted. The ${sym('q³')} bound is the fence that keeps every value far from that edge:</p>
-          <div class="wl">
+          <div class="wl" tabindex="0" role="group" aria-label="Number line diagram: 0, the q³ range-proof fence, and the modulus n = N, with an honest value and a malicious value plotted">
             <div class="wl-track">
               <span class="wl-tick wl-0">0</span>
               <span class="wl-fence" style="left:33%"><span class="wl-fence-label">q³ (the range-proof fence)</span></span>
@@ -548,7 +548,7 @@ const rerender = (): void => {
         </div>
 
         <p class="plain-lead">In plain terms: the prover shows "my hidden value is small (below ${sym('q³')})" without revealing it; the verifier re-runs two equations that only balance if that is true.</p>
-        <div class="math">Prove: c = (1+N)^m·r^N encrypts m ∈ [0, q).  Check: s₁≤q³,  (1+N)^s₁·s^N ≡ u·c^e,  h₁^s₁·h₂^s₂ ≡ w·z^e</div>
+        <div class="math" tabindex="0" role="group" aria-label="Range-proof statement and verification checks">Prove: c = (1+N)^m·r^N encrypts m ∈ [0, q).  Check: s₁≤q³,  (1+N)^s₁·s^N ≡ u·c^e,  h₁^s₁·h₂^s₂ ≡ w·z^e</div>
         <div class="controls">
           <button id="zk-setup" type="button" ${z.generating ? 'disabled' : ''}>${z.generating ? 'Generating…' : 'Trusted setup: Paillier key + aux (Ñ, h₁, h₂)'}</button>
           <button id="zk-honest" type="button" ${zkReady ? '' : 'disabled'}>Honest prover: m &lt; q</button>
@@ -576,16 +576,16 @@ const rerender = (): void => {
         <p>At key generation each party proves, in zero knowledge, that its Paillier modulus N is the product of two primes ≡ 3 (mod 4) and is square-free. This stops a malicious N for which decryption is ambiguous or the range proof is unsound. <em>Status here: assumed honest (we generate well-formed N).</em></p>
         <h3>2. MtA-with-check (range + discrete-log binding)</h3>
         <p>In the σ = k·x phase, the value being multiplied is a <em>committed key share</em> xᵢ with public point Xᵢ = xᵢ·G. MtA-with-check augments the range proof of Exhibit 6 with one extra equation proving the <em>same</em> m satisfies Xᵢ = m·G — so a party cannot use one value in the EC commitment and a different one inside Paillier. <em>Status here: range proof implemented (Exhibit 6); the DL-binding equation is described but not wired into the signing path.</em></p>
-        <div class="math">Extra commitment: û = m·G (curve point);  extra check: s₁·G ≟ û + e·Xᵢ</div>
+        <div class="math" tabindex="0" role="group" aria-label="MtA discrete-log binding check">Extra commitment: û = m·G (curve point);  extra check: s₁·G ≟ û + e·Xᵢ</div>
         <h3>3. Phase-5 consistency checks on R</h3>
         <p>Once R = δ⁻¹·Γ is formed, and <em>before</em> any party releases its sᵢ, each party broadcasts kᵢ·R and σᵢ·R — curve points, not scalars, so no share is revealed. The others then check two identities that hold only if everyone used the γᵢ they committed to as Γᵢ. A mismatch (exactly what the "malicious Party 2" toggle in Exhibit 4 induces) aborts the round. <em>Status here: implemented and evaluated on every signing run — see the Phase-5 panel in Exhibit 4.</em></p>
-        <div class="math">Σ kᵢ·R ≟ G   (since Σkᵢ = k and R = k⁻¹·G)      Σ σᵢ·R ≟ X   (since Σσᵢ = k·x)</div>
+        <div class="math" tabindex="0" role="group" aria-label="Phase-5 consistency checks">Σ kᵢ·R ≟ G   (since Σkᵢ = k and R = k⁻¹·G)      Σ σᵢ·R ≟ X   (since Σσᵢ = k·x)</div>
         <h3>4. Type-5 and Type-7 aborts (attribution)</h3>
         <p>If the final signature fails, GG20 runs a blame phase: parties reveal additional commitments and ZK proofs so honest parties agree on the single cheating identity. The "type-5"/"type-7" labels refer to the protocol phase whose proof failed. This is the step that turns <em>detection</em> into <em>identification</em>. <em>Status here: described, not implemented — faithful attribution needs every preceding proof in place.</em></p>
         <div class="callout">The honest takeaway: detection (does the protocol output a valid signature?) is cheap and real in this demo. Attribution (who cheated?) requires the full proof stack above; we implement its keystone — the range proof — and document the rest rather than fake it.</div>
-        <div class="table-wrap">
+        <div class="table-wrap" tabindex="0" role="group" aria-labelledby="t-proof-obligations-caption">
           <table>
-            <caption>Proof obligations in production GG20 vs. this demo</caption>
+            <caption id="t-proof-obligations-caption">Proof obligations in production GG20 vs. this demo</caption>
             <thead><tr><th scope="col">Component</th><th scope="col">Purpose</th><th scope="col">This demo</th></tr></thead>
             <tbody>
               <tr><th scope="row">secp256k1 + Paillier + MtA</th><td>Joint signing without key reconstruction</td><td>✓ implemented</td></tr>

@@ -759,6 +759,16 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+/* Horizontally scrollable containers carry tabindex="0" so a keyboard-only user
+   can reach and scroll their content (WCAG 2.1.1; axe scrollable-region-focusable).
+   Being focusable, they also need a visible focus indicator (WCAG 2.4.7). */
+.table-wrap:focus-visible,
+.math:focus-visible,
+.wl:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ---------- Skip link (ADA) ---------- */
 .skip-link:focus {
   top: 0;
