@@ -11,6 +11,7 @@
   --accent-2: hsl(35 96% 56%);
   --accent-soft: hsl(195 100% 80% / 0.18);
   --border: hsl(217 23% 30%);
+  --control-border: #6b7a91;
   --ok: hsl(145 63% 49%);
   --warn: hsl(40 97% 57%);
   --danger: hsl(0 84% 70%);
@@ -28,6 +29,7 @@
   --accent-2: hsl(20 90% 40%);
   --accent-soft: hsl(197 100% 45% / 0.12);
   --border: hsl(210 24% 80%);
+  --control-border: #748397;
   --ok: hsl(152 80% 25%);
   --warn: hsl(36 90% 30%);
   --danger: hsl(0 70% 45%);
@@ -221,7 +223,7 @@ button:disabled {
 input[type='text'],
 textarea {
   width: 100%;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: 0.55rem;
   background-color: var(--surface-alt);
   color: var(--text);
