@@ -16,13 +16,13 @@ export default defineConfig({
     // Build first: `vite preview` only serves the existing dist/, so without
     // this a broken build leaves the last good bundle in place and the suite
     // passes green against source that no longer compiles.
-    command: 'npm run build && npm run preview -- --port 4220 --strictPort',
-    url: 'http://localhost:4220/crypto-lab-gg20-wallet/',
+    command: 'npm run build && npm run preview -- --port 4643 --strictPort',
+    url: 'http://localhost:4643/crypto-lab-gg20-wallet/',
     reuseExistingServer: !process.env.CI,
   },
   projects: [{ name: 'chromium', use: { channel: undefined } }],
   use: {
-    baseURL: 'http://localhost:4220/crypto-lab-gg20-wallet/',
+    baseURL: 'http://localhost:4643/crypto-lab-gg20-wallet/',
     colorScheme: 'dark',
   },
 });
