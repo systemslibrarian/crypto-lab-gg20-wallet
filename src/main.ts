@@ -47,6 +47,12 @@ type SignState = {
   cheat: boolean;
   result?: SignResult;
   verifyEcho?: string;
+  // Whether the echoed verification actually succeeded. Kept separately from
+  // `result.verified` because the echo re-verifies against the message box as
+  // it reads *now* — edit the message after signing and the echo legitimately
+  // reports false while the earlier run remains valid. The echo's styling must
+  // follow its own computation, not the older run's.
+  verifyEchoOk?: boolean;
   selfTest?: { pass: number; total: number; running: boolean };
 };
 
@@ -483,7 +489,7 @@ const rerender = (): void => {
           <p class="mono verify-line" role="status">Verification: ${
             res === undefined ? 'Pending — run signing above' : res.verified ? '✓ valid standard ECDSA signature' : '✗ invalid'
           }</p>
-          ${s.verifyEcho ? `<p class="mono ${res?.verified ? 'ok' : 'danger'}">${esc(s.verifyEcho)}</p>` : ''}
+          ${s.verifyEcho ? `<p class="mono ${s.verifyEchoOk ? 'ok' : 'danger'}">${esc(s.verifyEcho)}</p>` : ''}
           ${res?.abortReason ? `<p class="danger" role="alert">⚠ Identifiable abort: ${esc(res.abortReason)}</p>` : ''}
           ${
             s.selfTest && !s.selfTest.running
@@ -641,6 +647,7 @@ const rerender = (): void => {
 const resetDownstream = (): void => {
   state.sign.result = undefined;
   state.sign.verifyEcho = undefined;
+  state.sign.verifyEchoOk = undefined;
   state.sign.selfTest = undefined;
 };
 
@@ -752,12 +759,14 @@ const bindEvents = (): void => {
     const { p1, p2, jointPub } = state.dkg;
     if (!p1 || !p2 || !jointPub) return;
     state.sign.verifyEcho = undefined;
+    state.sign.verifyEchoOk = undefined;
     try {
       const digest = await sha256Bytes(state.sign.message);
       state.sign.result = gg20Sign({ p1, p2, jointPub }, digest, state.sign.cheat);
     } catch (err) {
       state.sign.result = undefined;
       state.sign.verifyEcho = err instanceof Error ? `Aborted: ${err.message}` : String(err);
+      state.sign.verifyEchoOk = false;
     }
     rerender();
   });
@@ -768,6 +777,7 @@ const bindEvents = (): void => {
     if (!jointPub || !res) return;
     const digest = await sha256Bytes(state.sign.message);
     const ok = verifySignature(res.signatureHex, digest, jointPub);
+    state.sign.verifyEchoOk = ok;
     state.sign.verifyEcho = `secp256k1.verify(sig, SHA-256("${truncate(state.sign.message, 28)}"), X) → ${ok ? 'true ✓' : 'false ✗'}`;
     rerender();
   });
