@@ -160,14 +160,41 @@ const GLOSSARY_INDEX: Record<string, { name: string; gloss: string }> = Object.f
   GLOSSARY.map((g) => [g.sym, { name: g.name, gloss: g.gloss }])
 );
 
-// Inline glossable symbol: renders text with a tooltip + accessible description
-// so a newcomer can decode notation without leaving the page. `key` selects the
-// gloss; `label` is what actually appears (defaults to the key).
+const GLOSSARY_DESC_ID: Record<string, string> = Object.fromEntries(
+  GLOSSARY.map((g, i) => [g.sym, `gloss-desc-${i}`])
+);
+
+/**
+ * Off-screen descriptions for every glossed symbol, rendered once at the end of
+ * the page and referenced by `aria-describedby`.
+ *
+ * This exists because `aria-label` DOES NOT WORK ON `<abbr>`. An `<abbr>` has no
+ * ARIA role, so it maps to `generic`, and `aria-label` is prohibited on generic
+ * — the browser discards it and the definition reached no screen reader at all,
+ * despite the code comment that used to sit here claiming otherwise.
+ * `aria-describedby` is a global attribute and is NOT prohibited, so the
+ * description survives; it is announced on focus, which suits an element the
+ * stylesheet already makes focusable.
+ *
+ * It lives outside every exhibit deliberately: the claims spec reads the inner
+ * text of specific panels, and text injected into one of those regions would
+ * change what those assertions see.
+ */
+const glossDescriptions = (): string => `
+  <div class="sr-only">
+    ${GLOSSARY.map(
+      (g) => `<span id="${GLOSSARY_DESC_ID[g.sym]}">${esc(g.name)} — ${esc(g.gloss)}</span>`
+    ).join('')}
+  </div>`;
+
+// Inline glossable symbol: renders text with a tooltip plus an accessible
+// description so a newcomer can decode notation without leaving the page. `key`
+// selects the gloss; `label` is what actually appears (defaults to the key).
 const sym = (key: string, label = key): string => {
   const g = GLOSSARY_INDEX[key];
   if (!g) return esc(label);
   const title = `${g.name} — ${g.gloss}`;
-  return `<abbr class="gloss" tabindex="0" title="${esc(title)}" aria-label="${esc(label)}: ${esc(title)}">${esc(label)}</abbr>`;
+  return `<abbr class="gloss" tabindex="0" title="${esc(title)}" aria-describedby="${GLOSSARY_DESC_ID[key]}">${esc(label)}</abbr>`;
 };
 
 const glossaryKey = (): string => `
@@ -457,7 +484,7 @@ const rerender = (): void => {
           <li><strong>Round 3:</strong> reveal ${sym('δ')}, set ${sym('R')} = δ⁻¹·Γ = k⁻¹·G, each party computes sᵢ = ${sym('e')}·kᵢ + ${sym('r')}·σᵢ; output ${sym('s')} = s₁ + s₂.</li>
         </ol>
 
-        <div class="mta-explainer" aria-labelledby="mta-heading">
+        <section class="mta-explainer" aria-labelledby="mta-heading">
           <h3 id="mta-heading">The crux: how MtA turns a secret <em>product</em> into two harmless <em>sums</em></h3>
           <p class="plain-lead">GG20 needs P1's value <span class="mono-inline">a</span> times P2's value <span class="mono-inline">b</span>, but neither will reveal their number. MtA hands each party a <em>share</em> — ${sym('α', 'α')} to P1, ${sym('β', 'β')} to P2 — such that <strong>α + β = a·b</strong>, and neither share alone tells you anything. Step through a <em>real</em> run below (small readable numbers; the identical math runs at 1024-bit during signing):</p>
           <div class="controls">
@@ -470,7 +497,7 @@ const rerender = (): void => {
             'Every value shown is a genuine MtA computation (mtaTrace in the crypto core, unit-tested): encA is a real Paillier ciphertext of a, cReply = encA^b·Enc(β′) is real homomorphic evaluation, and α+β=a·b is recomputed and checked, not asserted.',
             'Small primes keep the ciphertexts short enough to read; signing (below) runs the same steps at 1024-bit. The ZK range proof each MtA message also carries is shown separately in Exhibit 6.'
           )}
-        </div>
+        </section>
         <label for="message">Message to sign</label>
         <input id="message" type="text" value="${esc(s.message)}" ${ready ? '' : 'disabled'} />
         <label class="check">
@@ -636,6 +663,7 @@ const rerender = (): void => {
         </div>
       </section>
     </main>
+    ${glossDescriptions()}
   `;
 
   bindEvents();

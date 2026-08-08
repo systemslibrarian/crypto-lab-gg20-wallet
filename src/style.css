@@ -118,7 +118,13 @@ header:not(.cl-hero):not(.cl-topbar) h1 {
 .cl-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:clamp(1rem,4vw,3rem);flex-wrap:wrap;margin:clamp(1rem,3vw,2rem) 0 1.5rem;}
 .cl-hero-main{flex:1 1 22rem;min-width:min(100%,20rem);}
 .cl-hero-title{margin:0;font-size:clamp(1.6rem,3.8vw,2.7rem);font-weight:700;line-height:1.1;letter-spacing:.01em;}
-.cl-hero-sub{margin:.4rem 0 0;font-size:clamp(.9rem,1.6vw,1.05rem);letter-spacing:.01em;opacity:.85;}
+/* `color: var(--text)` is not decoration here. This is a <p>, so the blanket
+   `p { color: var(--text-muted) }` rule above applied, and the shared header's
+   `opacity: .85` then faded an already-muted colour: 4.28:1 in light theme, a
+   real 1.4.3 failure on the page's own subtitle. The 15% fade is fine over the
+   full-strength text colour (7.7:1), which is what the other labs carrying this
+   header do. */
+.cl-hero-sub{margin:.4rem 0 0;font-size:clamp(.9rem,1.6vw,1.05rem);letter-spacing:.01em;opacity:.85;color:var(--text);}
 .cl-hero-desc{margin:.55rem 0 0;font-size:1rem;line-height:1.5;color:var(--text-muted);max-width:60ch;}
 .cl-hero-why{flex:0 1 min(40%,26rem);min-width:min(100%,15rem);border:1px solid var(--border);border-radius:10px;padding:.85rem 1.05rem;background:color-mix(in oklab,var(--accent) 6%,transparent);}
 .cl-hero-why-label{display:block;font-size:.68rem;font-weight:700;letter-spacing:.14em;}
@@ -769,6 +775,21 @@ a:focus-visible {
 .wl:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Off-screen but still announced: the glossary descriptions each `<abbr>`
+   points at with aria-describedby. Not `display: none` — a referenced element
+   hidden that way contributes no description at all. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ---------- Skip link (ADA) ---------- */
