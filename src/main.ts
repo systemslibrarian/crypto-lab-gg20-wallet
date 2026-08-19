@@ -32,8 +32,6 @@ import {
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app');
 
-type ThemeMode = 'dark' | 'light';
-
 type DkgState = {
   p1?: Party;
   p2?: Party;
@@ -90,27 +88,6 @@ const state: {
   },
   mta: { step: 0 },
   zk: {}
-};
-
-// ---------- Theme ----------
-
-const currentTheme = (): ThemeMode =>
-  document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-
-const applyThemeButton = (): void => {
-  const btn = document.querySelector<HTMLButtonElement>('#theme-toggle');
-  if (!btn) return;
-  const t = currentTheme();
-  btn.textContent = t === 'dark' ? '🌙' : '☀️';
-  const next = t === 'dark' ? 'light' : 'dark';
-  btn.setAttribute('aria-label', `Switch to ${next} mode`);
-  btn.setAttribute('title', `Switch to ${next} mode`);
-};
-
-const setTheme = (t: ThemeMode): void => {
-  document.documentElement.setAttribute('data-theme', t);
-  localStorage.setItem('theme', t);
-  applyThemeButton();
 };
 
 // ---------- Formatting ----------
@@ -360,7 +337,6 @@ const rerender = (): void => {
       : '';
 
   app.innerHTML = `
-    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme">🌙</button>
     <div class="cl-hero">
       <div class="cl-hero-main">
         <h1 class="cl-hero-title">GG20 Wallet</h1>
@@ -667,7 +643,6 @@ const rerender = (): void => {
   `;
 
   bindEvents();
-  applyThemeButton();
 };
 
 // ---------- Events ----------
@@ -680,10 +655,6 @@ const resetDownstream = (): void => {
 };
 
 const bindEvents = (): void => {
-  document.querySelector<HTMLButtonElement>('#theme-toggle')?.addEventListener('click', () => {
-    setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
-  });
-
   // Exhibit 2 — Paillier playground (small, readable key)
   document.querySelector<HTMLButtonElement>('#paillier-keygen')?.addEventListener('click', () => {
     state.paillierDemo.keypair = paillierKeygen(16);
@@ -867,4 +838,3 @@ const bindEvents = (): void => {
 };
 
 rerender();
-applyThemeButton();
