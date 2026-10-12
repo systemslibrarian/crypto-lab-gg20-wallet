@@ -130,7 +130,7 @@ const GLOSSARY: ReadonlyArray<{ sym: string; name: string; gloss: string }> = [
   { sym: 'α / β', name: 'alpha / beta — MtA shares', gloss: 'the additive shares MtA produces: α + β = a·b, one held by each party.' },
   { sym: 'N', name: 'Paillier modulus', gloss: 'the public modulus of a party’s Paillier key; encryption works mod N².' },
   { sym: 'Ñ', name: 'auxiliary modulus', gloss: 'a second RSA modulus used only by the range proof’s Pedersen commitment.' },
-  { sym: 'q³', name: 'range bound', gloss: 'the ceiling the range proof enforces on the encrypted value; the fence that stops the wraparound attack.' }
+  { sym: 'q³', name: 'range bound', gloss: 'the ceiling checked on response s₁, not an exact bound on the encrypted plaintext.' }
 ];
 
 const GLOSSARY_INDEX: Record<string, { name: string; gloss: string }> = Object.fromEntries(
@@ -327,7 +327,7 @@ const rerender = (): void => {
   const zkRunRows = (run: ZkRun | undefined): string =>
     run
       ? `
-        <p class="mono">m (secret plaintext, hidden in proof): ${run.m > RANGE_BOUND ? `${truncate(run.m, 20)} — ${run.m.toString(2).length} bits` : 'a valid share < q (256 bits)'}</p>
+        <p class="mono">m (secret plaintext, hidden in proof): ${run.m >= ORDER ? `${truncate(run.m, 20)} — ${run.m.toString(2).length} bits` : 'a valid share < q (256 bits)'}</p>
         <p class="mono">s₁ = e·m + α: ${run.proof.s1.toString(2).length} bits   (range bound q³ = ${RANGE_BOUND.toString(2).length} bits)</p>
         <p class="mono ${run.verdict.rangeOk ? 'ok' : 'danger'}">① range bound (0 ≤ s₁ ≤ q³): ${run.verdict.rangeOk ? '✓ pass' : '✗ FAIL'}</p>
         <p class="mono ${run.verdict.challengeOk ? 'ok' : 'danger'}">② Fiat–Shamir challenge: ${run.verdict.challengeOk ? '✓ pass' : '✗ FAIL'}</p>
@@ -348,7 +348,7 @@ const rerender = (): void => {
       <aside class="cl-hero-why" aria-label="Why it matters">
         <span class="cl-hero-why-label">WHY IT MATTERS</span>
         <p class="cl-hero-why-text">
-          Most major assets still ride on secp256k1/ECDSA, so institutional custody depends on threshold ECDSA that never assembles the key. A ZK range proof is the single check that blocks the wraparound attack.
+          Most major assets still ride on secp256k1/ECDSA, so institutional custody depends on threshold ECDSA that never assembles the key. Production MtA requires the full proof and parameter-validation stack.
         </p>
       </aside>
     </div>
@@ -538,26 +538,10 @@ const rerender = (): void => {
       <section class="exhibit" id="exhibit-6" aria-labelledby="ex6-heading">
         <h2 id="ex6-heading">Exhibit 6 — Zero-Knowledge Range Proof (runnable)</h2>
         <!-- runnable ZK range proof -->
-        <p>This is the proof Exhibit 5 referred to, implemented for real. Every MtA message in GG20 carries a ZK proof that the encrypted value is <em>small</em> (in [0, q)). Without it, a malicious party could encrypt ${sym('N', 'm ≈ N')} so that m·(other share) + blind <strong>wraps modulo n</strong>, silently corrupting the additive sharing. The proof convinces the verifier the value is in range <em>without revealing it</em> — the classic GG18 / Lindell Σ-protocol over a Pedersen commitment (auxiliary modulus ${sym('Ñ')}).</p>
-
-        <div class="wrap-viz" role="group" aria-label="Wraparound number line: an honest small value stays in range; a malicious near-N value wraps past the modulus">
-          <p class="plain-lead">Why "small" matters — the number line MtA lives on. MtA's shares must add up over the <em>integers</em>; if a value is big enough that the sum passes the modulus ${sym('N')}, it silently <em>wraps</em> and the share is corrupted. The ${sym('q³')} bound is the fence that keeps every value far from that edge:</p>
-          <div class="wl" tabindex="0" role="group" aria-label="Number line diagram: 0, the q³ range-proof fence, and the modulus n = N, with an honest value and a malicious value plotted">
-            <div class="wl-track">
-              <span class="wl-tick wl-0">0</span>
-              <span class="wl-fence" style="left:33%"><span class="wl-fence-label">q³ (the range-proof fence)</span></span>
-              <span class="wl-tick wl-n" style="left:100%">n = N (modulus)</span>
-              <span class="wl-marker wl-honest" style="left:12%" title="honest m·share+blind — safely below the fence">honest ✓</span>
-              <span class="wl-marker wl-evil" style="left:96%" title="malicious m ≈ N — sits past the fence and wraps mod n">malicious m≈N ✗</span>
-            </div>
-          </div>
-          <p class="wl-caption mono">Honest values (a·b + blind ≪ q³) sit far left of the fence. A malicious m≈N lands to the <em>right</em> of the fence — the range check <span class="danger">s₁ ≤ q³</span> is exactly what rejects it before the wrap can happen.${
-            z.malicious ? (z.malicious.verdict.rangeOk ? '' : ' <span class="danger">← you just triggered this: the malicious run failed the fence check below.</span>') : ''
-          }</p>
-        </div>
-
-        <p class="plain-lead">In plain terms: the prover shows "my hidden value is small (below ${sym('q³')})" without revealing it; the verifier re-runs two equations that only balance if that is true.</p>
-        <div class="math" tabindex="0" role="group" aria-label="Range-proof statement and verification checks">Prove: c = (1+N)^m·r^N encrypts m ∈ [0, q).  Check: s₁≤q³,  (1+N)^s₁·s^N ≡ u·c^e,  h₁^s₁·h₂^s₂ ≡ w·z^e</div>
+        <p>This standalone GG18/Lindell-style proof demonstrates a response bound and two algebraic relations. Honest inputs use m ∈ [0, q); the verifier checks 0 ≤ s₁ ≤ q³, challenge consistency, and the equations below. These are different claims: <strong>acceptance does not prove the exact plaintext interval [0, q)</strong>. A constructed transcript for m = q passes all four checks.</p>
+        <p>A wider extraction bound needs the published proof’s setup and soundness assumptions; it cannot be inferred from the response bound alone. This lab uses scaled-down parameters and does not wire this proof into its signing path. See the <a href="https://eprint.iacr.org/2019/114">GG18 revision of December 17, 2021</a> and <a href="https://eprint.iacr.org/2021/1621">Alpha-Rays, December 14, 2021</a> for why full MtA proof and parameter checks matter.</p>
+        <p class="plain-lead">The near-N example below illustrates rejection by the response bound while the equations still hold. It is a particular negative control, not a proof that every out-of-interval plaintext is rejected.</p>
+        <div class="math" tabindex="0" role="group" aria-label="Verifier predicates">Honest input: m ∈ [0, q). Verifier: 0 ≤ s₁ ≤ q³; e = H(N,c,z,u,w) mod q; (1+N)^s₁·s^N ≡ u·c^e; h₁^s₁·h₂^s₂ ≡ w·z^e.</div>
         <div class="controls">
           <button id="zk-setup" type="button" ${z.generating ? 'disabled' : ''}>${z.generating ? 'Generating…' : 'Trusted setup: Paillier key + aux (Ñ, h₁, h₂)'}</button>
           <button id="zk-honest" type="button" ${zkReady ? '' : 'disabled'}>Honest prover: m &lt; q</button>
@@ -571,9 +555,9 @@ const rerender = (): void => {
           <h3>Malicious prover (out-of-range value)</h3>
           ${z.malicious ? zkRunRows(z.malicious) : '<p class="mono">— run the malicious prover —</p>'}
         </div>
-        <div class="callout"><strong>Why this matters:</strong> the algebraic relations hold for the cheater too — only the <em>range bound</em> s₁ ≤ q³ catches them. That single inequality is what makes GG20's MtA safe against the wraparound attack from Exhibit 5.</div>
+        <div class="callout"><strong>Why this matters:</strong> the algebraic relations hold for the cheater too — only the <em>range bound</em> s₁ ≤ q³ catches them. This rejects the displayed near-N transcript; acceptance alone is not an exact-range or full-protocol security guarantee.</div>
         ${honesty(
-          'A genuine, verifying Fiat–Shamir range proof: real Pedersen commitments mod Ñ, real Paillier relation mod N², real soundness (tampered proofs and out-of-range values are rejected).',
+          'A genuine, verifying Fiat–Shamir range proof: real Pedersen commitments mod Ñ, real Paillier relation mod N², actual challenge/equation checks and a response bound; tampering and the selected near-N example are rejected.',
           'The aux modulus uses a single trusted setup in-page (production: the verifier supplies Ñ so the prover cannot know log_{h₁} h₂); 512-bit primes; q³ slack rather than a tightened bound.'
         )}
       </section>
