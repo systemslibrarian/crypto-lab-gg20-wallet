@@ -8,6 +8,7 @@ import {
   HALF_ORDER,
   RANGE_BOUND,
   mod,
+  modPow,
   isProbablePrime,
   paillierKeygen,
   paillierEncrypt,
@@ -250,4 +251,28 @@ test('the full private key is never reconstructed during signing', async () => {
   const res = gg20Sign({ p1, p2, jointPub }, await sha256Bytes('x'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(res, 'x'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(res, 'privateKey'), false);
+});
+
+// Deterministic transcript using a fixed, valid Paillier modulus (Mersenne primes).
+test('response-bound acceptance does not certify the exact interval: m=q', async () => {
+  const p = (1n << 521n) - 1n;
+  const q = (1n << 607n) - 1n;
+  const n = p*q;
+  // Verification uses only n, nsq and g; use a real key for honest controls below.
+  const pk = { n, nsq:n*n, g:n+1n } as ReturnType<typeof paillierKeygen>;
+  const aux = { nTilde: 101n*113n, h1:4n, h2:16n };
+  const m = ORDER;
+  const c = modPow(pk.g,m,pk.nsq);
+  const z = modPow(aux.h1,m,aux.nTilde);
+  const e = BigInt('0x'+await sha256Hex([n,c,z,1n,1n].map(x=>x.toString(16)).join('|'))) % ORDER;
+  const v = await verifyRange({z,u:1n,w:1n,s:1n,s1:e*m,s2:0n,e},c,pk,aux);
+  assert.equal(v.ok,true);
+  assert.match(v.reason,/does not certify/);
+});
+test('honest interval endpoints 0 and q-1 still pass', async () => {
+  const pk=paillierKeygen(512), aux=setupRangeProofAux(512);
+  for (const m of [0n, ORDER-1n]) {
+    const {c,r}=paillierEncryptWithR(m,pk);
+    assert.equal((await verifyRange(await proveRange(m,r,c,pk,aux),c,pk,aux)).ok,true);
+  }
 });

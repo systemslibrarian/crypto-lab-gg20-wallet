@@ -424,7 +424,7 @@ test('an honest range proof passes all four checks and the verdict is their conj
     await expect(zkLine(page, mark, 0)).toHaveClass(/ok/);
   }
   await expect(verdict).toContainText('✓ accepted');
-  await expect(verdict).toContainText('the plaintext is proven to lie in [0, q) — without revealing it');
+  await expect(verdict).toContainText('This does not certify the exact plaintext interval [0, q)');
   await expect(verdict).toHaveClass(/ok/);
 
   // The bound the page reports must be the real q³, and the honest response
@@ -474,10 +474,8 @@ test('an out-of-range prover (m ≈ N) is rejected by the range bound alone', as
   expect(mBits).toBeGreaterThanOrEqual(1023);
   expect(mBits).toBeLessThanOrEqual(1024);
 
-  // The number-line callout is wired to the run that just happened.
-  await expect(page.locator('.wl-caption')).toContainText(
-    'you just triggered this: the malicious run failed the fence check below'
-  );
+  await expect(page.locator('#exhibit-6')).toContainText('acceptance does not prove the exact plaintext interval');
+  await expect(page.locator('#exhibit-6')).toContainText('particular negative control');
 });
 
 test('both provers run side by side: honest accepted, malicious rejected, same setup', async ({

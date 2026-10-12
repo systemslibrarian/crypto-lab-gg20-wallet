@@ -470,35 +470,18 @@ export const gg20Sign = (
 
 // ---------- ZK range proof for MtA (real, runnable) ----------
 //
-// Every MtA message in GG20 carries a zero-knowledge proof that the encrypted
-// value is "small" (in [0, q)). Without it, a malicious party could encrypt a
-// value m ≈ N so that m·(other share) + blind WRAPS modulo n, silently
-// corrupting the additive sharing and breaking the signature (or leaking key
-// material). This is the proof referenced in Exhibit 5.
-//
-// It is the classic GG18 / Lindell range proof: a Fiat–Shamir Σ-protocol over
-// the Paillier ciphertext and a Pedersen-style commitment using an auxiliary
-// RSA modulus Ñ. It proves m ∈ [0, q) WITHOUT revealing m.
-//
-//   Statement : c = (1+N)^m · r^N mod N²   encrypts some m ∈ [0, q)
-//   Witness   : m, r
-//   Aux (trusted setup): Ñ = P̃·Q̃,  h₁ ∈ Z*_Ñ,  h₂ = h₁^λ  (λ discarded)
-//
-//   Prover:  α←[0,q³) ρ←[0,q·Ñ) γ←[0,q³·Ñ) β←Z*_N
-//            z = h₁^m·h₂^ρ        (mod Ñ)
-//            u = (1+N)^α·β^N      (mod N²)
-//            w = h₁^α·h₂^γ        (mod Ñ)
-//            e = H(N,c,z,u,w) mod q
-//            s = r^e·β (mod N),  s₁ = e·m+α,  s₂ = e·ρ+γ   (s₁,s₂ over ℤ)
-//
-//   Verifier checks (all four must hold):
-//            (1) 0 ≤ s₁ ≤ q³                       ← the RANGE bound
-//            (2) e = H(N,c,z,u,w) mod q            ← Fiat–Shamir binding
-//            (3) (1+N)^s₁·s^N ≡ u·c^e  (mod N²)    ← ties proof to ciphertext
-//            (4) h₁^s₁·h₂^s₂ ≡ w·z^e   (mod Ñ)     ← ties proof to commitment
-
-// Range bound: the proof shows the value is at most q³ (with honest values < q,
-// so s₁ = e·m+α < q²+q³ ≤ q³ except with probability ~1/q ≈ 2⁻²⁵⁶).
+// In this standalone GG18-style teaching proof, the honest prover uses m in [0, q). The verifier below checks a response bound,
+// challenge consistency, and two equations; acceptance does NOT certify that
+// exact witness interval. In particular a constructed transcript for m=q passes.
+// Wider extraction bounds require the published protocol's setup and soundness
+// assumptions; no such theorem is claimed for this scaled-down teaching variant.
+// See GG18 revision 2021-12-17: https://eprint.iacr.org/2019/114
+// and Alpha-Rays (2021-12-14): https://eprint.iacr.org/2021/1621
+// Prover: alpha in [0,q³), rho in [0,q*Ntilde), gamma in [0,q³*Ntilde).
+// s1=e*m+alpha is an integer response, not the plaintext.
+// Verifier checks 0<=s1<=q³, e=H(N,c,z,u,w) mod q, and the
+// Paillier and auxiliary commitment equations. Honest proving can very rarely
+// exceed the response bound; the inequality q²+q³<=q³ would be false.
 export const RANGE_BOUND = ORDER * ORDER * ORDER; // q³
 
 export type RangeProofAux = { nTilde: bigint; h1: bigint; h2: bigint };
@@ -566,7 +549,7 @@ export const proveRange = async (
 
 export type RangeVerdict = {
   ok: boolean;
-  /** (1) 0 ≤ s₁ ≤ q³ — the bound that stops the wraparound attack. */
+  /** (1) 0 ≤ s₁ ≤ q³ — response bound (not an exact plaintext bound). */
   rangeOk: boolean;
   /** (2) e = H(N,c,z,u,w) mod q — Fiat–Shamir binding. */
   challengeOk: boolean;
@@ -607,7 +590,7 @@ export const verifyRange = async (
 
   let reason: string;
   if (ok) {
-    reason = 'all four checks passed: the plaintext is proven to lie in [0, q) — without revealing it.';
+    reason = 'all four checks passed: response bound, challenge consistency and both equations hold. This does not certify the exact plaintext interval [0, q).';
   } else if (!rangeOk && challengeOk && paillierOk && commitmentOk) {
     reason = `rejected by the RANGE BOUND ALONE: s₁ has ${s1.toString(2).length} bits against a q³ bound of ${RANGE_BOUND.toString(2).length}. Checks (2)–(4) all passed — the cheater's algebra is valid, which is exactly why the bound has to exist.`;
   } else {
